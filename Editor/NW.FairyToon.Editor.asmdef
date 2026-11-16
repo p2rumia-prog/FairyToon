@@ -1,0 +1,11 @@
+{
+  "name": "NW.FairyToon.Editor",
+  "references": [
+    "NW.FairyToon.Runtime",
+    "Unity.RenderPipelines.Universal.Runtime",
+    "Unity.RenderPipelines.Core.Runtime"
+  ],
+  "includePlatforms": [
+    "Editor"
+  ]
+}
