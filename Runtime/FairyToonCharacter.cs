@@ -5,7 +5,8 @@ using UnityEngine.Rendering;
 namespace NW.FairyToon
 {
     /// <summary>Character-level lighting for Endfield-mode FairyToon materials: sun / shade state, the top fill light, a
-    /// main-light override, a terminator offset, a directional ambient and up to four small character lights.</summary>
+    /// main-light override, a terminator offset, a directional ambient with an optional cap, an exposure for the main light
+    /// and up to four small character lights.</summary>
     /// <remarks>Put it on the avatar root. The values go out as shader globals, so they apply to every Endfield material
     /// in view: fine for one lab character; per-character values are an open item. Without this component the shaders
     /// use full sun, no top light, the scene's light and ambient, and no small lights.</remarks>
@@ -20,6 +21,8 @@ namespace NW.FairyToon
         private static readonly int ParamsId = Shader.PropertyToID("_FT_EFParams");
         private static readonly int AmbientSkyId = Shader.PropertyToID("_FT_EFAmbientSky");
         private static readonly int AmbientGroundId = Shader.PropertyToID("_FT_EFAmbientGround");
+        private static readonly int ExposureId = Shader.PropertyToID("_FT_EFExposure");
+        private static readonly int AmbientCapId = Shader.PropertyToID("_FT_EFAmbientCap");
         private static readonly int SmallLightPositionId = Shader.PropertyToID("_FT_EFSmallLightPosition");
         private static readonly int SmallLightColorId = Shader.PropertyToID("_FT_EFSmallLightColor");
         private static readonly int SmallLightRoleId = Shader.PropertyToID("_FT_EFSmallLightRole");
@@ -107,6 +110,26 @@ namespace NW.FairyToon
         [ColorUsage(false, true)] [SerializeField] private Color ambientSky = new Color(0.5f, 0.56f, 0.66f);
         [Tooltip("Ambient from below.")]
         [ColorUsage(false, true)] [SerializeField] private Color ambientGround = new Color(0.24f, 0.22f, 0.21f);
+        [Tooltip("Caps the ambient light's luminance (hue kept), so a bright or strongly coloured probe cannot wash the " +
+            "character out. 0 = no cap.")]
+        [Range(0f, 2f)] [SerializeField] private float ambientMaxLuminance;
+        [Tooltip("Saturation of the ambient light around its luminance: 1 as the probe or gradient gives it, 0 grey. A " +
+            "low value keeps a hint of the sky's colour without tinting the character.")]
+        [Range(0f, 1f)] [SerializeField] private float ambientSaturation = 1f;
+        [Tooltip("Soft ceiling on ambient + top + direct light (luminance): passes values below half of it, rolls off " +
+            "towards it above. 0 = no ceiling.")]
+        [Range(0f, 4f)] [SerializeField] private float lightCeiling;
+
+        [Header("Exposure")]
+        [Tooltip("Scales the main light's direct term (diffuse, specular, hair band, light rim, backlight, outline) " +
+            "without changing the sun / shade state. Use it to darken a character at night; DayStrength below 1 moves " +
+            "her into the shade look instead.")]
+        [Range(0f, 2f)] [SerializeField] private float exposure = 1f;
+        [Tooltip("0 = the main light counts as a colour only (normalised, as in Endfield). 1 = its luminance over the " +
+            "reference below scales the direct term too (capped at 1), so a dim moon gives a dim key light.")]
+        [Range(0f, 1f)] [SerializeField] private float followLightIntensity;
+        [Tooltip("Main light luminance (colour x intensity) that counts as full strength for Follow Light Intensity.")]
+        [Min(0.0001f)] [SerializeField] private float referenceLuminance = 1f;
 
         public float DayStrength
         {
@@ -180,6 +203,42 @@ namespace NW.FairyToon
             set { ambientGround = value; Push(); }
         }
 
+        public float AmbientMaxLuminance
+        {
+            get => ambientMaxLuminance;
+            set { ambientMaxLuminance = Mathf.Max(0f, value); Push(); }
+        }
+
+        public float AmbientSaturation
+        {
+            get => ambientSaturation;
+            set { ambientSaturation = Mathf.Max(0f, value); Push(); }
+        }
+
+        public float LightCeiling
+        {
+            get => lightCeiling;
+            set { lightCeiling = Mathf.Max(0f, value); Push(); }
+        }
+
+        public float Exposure
+        {
+            get => exposure;
+            set { exposure = Mathf.Max(0f, value); Push(); }
+        }
+
+        public float FollowLightIntensity
+        {
+            get => followLightIntensity;
+            set { followLightIntensity = Mathf.Clamp01(value); Push(); }
+        }
+
+        public float ReferenceLuminance
+        {
+            get => referenceLuminance;
+            set { referenceLuminance = Mathf.Max(0.0001f, value); Push(); }
+        }
+
         /// <summary>The small lights registered on this character, in the order the shader takes them.</summary>
         public IReadOnlyList<FairyToonCharacterLight> SmallLights => smallLights;
 
@@ -214,6 +273,8 @@ namespace NW.FairyToon
             Shader.SetGlobalVector(LightOverrideId, Vector4.zero);
             Shader.SetGlobalVector(ParamsId, Vector4.zero);
             Shader.SetGlobalVector(AmbientSkyId, Vector4.zero);
+            Shader.SetGlobalVector(ExposureId, Vector4.zero);
+            Shader.SetGlobalVector(AmbientCapId, Vector4.zero);
         }
 
         private void OnTransformChildrenChanged() => RefreshRenderers();
@@ -355,6 +416,8 @@ namespace NW.FairyToon
             Color sky = ambientSky.linear, ground = ambientGround.linear;
             Shader.SetGlobalVector(AmbientSkyId, new Vector4(sky.r, sky.g, sky.b, ambientBlend));
             Shader.SetGlobalVector(AmbientGroundId, new Vector4(ground.r, ground.g, ground.b, 0f));
+            Shader.SetGlobalVector(ExposureId, new Vector4(exposure, followLightIntensity, Mathf.Max(referenceLuminance, 0.0001f), 1f));
+            Shader.SetGlobalVector(AmbientCapId, new Vector4(ambientMaxLuminance, ambientSaturation, lightCeiling, 1f));
             int count = 0;
             for (int i = 0; i < smallLights.Count && count < MaxSmallLights; i++)
             {
