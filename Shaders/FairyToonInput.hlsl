@@ -493,6 +493,13 @@ float4 _FT_EFParams;
 // gradient over the scene's ambient probe
 float4 _FT_EFAmbientSky;
 float4 _FT_EFAmbientGround;
+// Endfield exposure (FairyToonCharacter): x multiplier on the main light's direct term (it leaves the sun / shade state
+// alone, unlike DayStrength), y how far the main light's own intensity is followed (0 normalised to luminance 1 as
+// before, 1 its luminance over z), z reference luminance, w = 1 when set (0 everywhere = no change)
+float4 _FT_EFExposure;
+// Endfield ambient cap (FairyToonCharacter): x most luminance the ambient light may have (0 off), y ambient
+// saturation (1 unchanged), z soft ceiling on the luminance of ambient + top + direct (0 off), w = 1 when set
+float4 _FT_EFAmbientCap;
 // Small character lights (FairyToonCharacterLight): xyz world position, w range; rgb linear colour, a intensity; x role
 // (0 fill, 1 tint, 2 highlight, 3 rim, 4 fog)
 // x = 1 when the FairyToon feature has asked URP for the camera depth texture before opaques (the depth edge rim needs

@@ -75,7 +75,40 @@ half3 FairyToonEFAmbient(float3 N, FairyToonSurface s)
     half3 average = (FairyToonSH(float3(0, 1, 0), s) + FairyToonSH(float3(0, -1, 0), s)) * 0.5;
     half3 probe = lerp(average, FairyToonSH(N, s), 0.5);
     half3 gradient = lerp(_FT_EFAmbientGround.rgb, _FT_EFAmbientSky.rgb, saturate(N.y * 0.5 + 0.5));
-    return lerp(probe, gradient, saturate(_FT_EFAmbientSky.w));
+    half3 ambient = lerp(probe, gradient, saturate(_FT_EFAmbientSky.w));
+    // Ambient cap (FairyToonCharacter): Endfield adds the ambient to a sun normalised to 1 without a clamp, so a strongly
+    // coloured probe (a blue sky) lifts the whole character towards white. Saturation scales its chroma around its
+    // luminance, Max Luminance scales it down (hue kept). Off without the component or at the defaults.
+    if (_FT_EFAmbientCap.w > 0.5)
+    {
+        half luma = Luminance(ambient);
+        if (_FT_EFAmbientCap.y != 1.0) ambient = max(luma + (ambient - luma) * max(_FT_EFAmbientCap.y, 0.0), 0.0);
+        if (_FT_EFAmbientCap.x > 0.0) ambient *= min(1.0, _FT_EFAmbientCap.x / max(luma, 0.0001));
+    }
+    return ambient;
+}
+
+// Exposure of the main light (FairyToonCharacter): scales the normalised main light without touching DayStrength, so a
+// character can darken (night, a dim interior) and keep her sun-side shading. Follow Light blends towards the light's
+// own luminance over a reference, so a dim moon gives a dim key light. 1 without the component.
+half FairyToonEFExposure(half rawLuminance)
+{
+    if (_FT_EFExposure.w < 0.5) return 1.0;
+    half follow = saturate(rawLuminance / max(_FT_EFExposure.z, 0.0001));
+    return max(_FT_EFExposure.x, 0.0) * lerp(1.0, follow, saturate(_FT_EFExposure.y));
+}
+
+// Soft ceiling on the summed main light (ambient + top + direct), off at 0: identity up to half the ceiling, then an
+// exponential shoulder towards it, so the sum cannot run far past white. Hue kept.
+half3 FairyToonEFLightCeiling(half3 sum)
+{
+    half ceiling = _FT_EFAmbientCap.z;
+    if (_FT_EFAmbientCap.w < 0.5 || ceiling <= 0.0) return sum;
+    half luma = Luminance(sum);
+    half knee = 0.5 * ceiling;
+    if (luma <= knee) return sum;
+    half mapped = knee + (ceiling - knee) * (1.0 - exp(-(luma - knee) / (ceiling - knee)));
+    return sum * (mapped / luma);
 }
 
 // Main light direction, optionally swapped for a light fixed to the camera (FairyToonCharacter Light Override, after the
@@ -295,7 +328,11 @@ half3 FairyToonEndfieldShade(FairyToonSurface s, inout FairyToonLight l)
     #endif
     // (the main light counts as a colour only, normalised to luminance 1 as in the captured Endfield shader; how strong
     // the sun is comes from DayStrength, so the character keeps one exposure under any sun intensity)
-    lightColor /= max(Luminance(lightColor), 0.0001);
+    half rawLightLuma = Luminance(lightColor);
+    lightColor /= max(rawLightLuma, 0.0001);
+    // (exposure scales every use of the direct light below: diffuse, specular, hair band, light rim, backlight; the
+    // sun / shade weights still come from DayStrength alone)
+    lightColor *= FairyToonEFExposure(rawLightLuma);
     float3 L = FairyToonEFLightDirection(mainLight.direction);
     // (scene shadow on the character, scaled out in the shade state; the character's own shadow comes from the
     // character shadow map below)
@@ -443,7 +480,7 @@ half3 FairyToonEndfieldShade(FairyToonSurface s, inout FairyToonLight l)
     half3 topLight = FairyToonEFTopLight(N, character);
     half lightLuma = Luminance(lightColor);
     half3 direct = lerp(lightLuma.xxx, lightColor, lit * sceneLit) * day;
-    half3 mainSum = ambient + topLight + direct;
+    half3 mainSum = FairyToonEFLightCeiling(ambient + topLight + direct);
 
     l.addLightColor = 0;
     #if defined(_FT_EF_FACE)
@@ -618,7 +655,8 @@ half3 FairyToonEFOutlineColor(FairyToonSurface s, half3 albedo)
     half3 tone = lerp(dark, albedo, 0.35 * ramp.a * day);
     half chroma = max(ramp.r, max(ramp.g, ramp.b)) - min(ramp.r, min(ramp.g, ramp.b));
     tone *= lerp(1.0, ramp.rgb, chroma);
-    half3 light = FairyToonEFAmbient(s.N, s) + FairyToonEFTopLight(s.N, character) + day * lerp(0.35, 1.0, ramp.a);
+    half exposure = FairyToonEFExposure(Luminance(mainLight.color * mainLight.distanceAttenuation));
+    half3 light = FairyToonEFAmbient(s.N, s) + FairyToonEFTopLight(s.N, character) + day * exposure * lerp(0.35, 1.0, ramp.a);
     half3 col = tone * _EFOutlineColor.rgb;
     // Endfield's lines are the local colour pushed far into saturation (a red-orange line on skin, a deep hue on
     // hair), not a dark grey: scale the chroma around the luminance. Before the light, so a cool shade light greys the
