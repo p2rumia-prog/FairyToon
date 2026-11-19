@@ -15,18 +15,47 @@ namespace NW.FairyToon.Editor
         {
             bool mixed = EditorGUI.showMixedValue;
             EditorGUI.showMixedValue = prop.hasMixedValue;
-            EditorGUI.BeginChangeCheck();
-            Rect labelRect = position;
-            labelRect.width = Mathf.Max(0f, position.width - 148f);
-            Rect swatch = new Rect(labelRect.xMax + 4f, position.y, 18f, position.height);
-            Rect hex = new Rect(swatch.xMax + 4f, position.y, 122f, position.height);
-            EditorGUI.LabelField(labelRect, FairyToonL10n.Text(label));
-            Color value = EditorGUI.ColorField(swatch, GUIContent.none, prop.colorValue, true, true, true);
-            string written = EditorGUI.TextField(hex, ColorUtility.ToHtmlStringRGB(value));
-            if (written != ColorUtility.ToHtmlStringRGB(value) && ColorUtility.TryParseHtmlString("#" + written, out Color parsed))
-                value = new Color(parsed.r, parsed.g, parsed.b, value.a);
-            if (EditorGUI.EndChangeCheck()) prop.colorValue = value;
+            Color value = prop.colorValue;
+            if (Draw(position, FairyToonL10n.Text(label), ref value)) prop.colorValue = value;
             EditorGUI.showMixedValue = mixed;
+        }
+
+        // Hex stores the colour divided by its peak channel, then the peak is multiplied back.
+        // A value above 1 survives an edit. The swatch itself is not Unity's HDR bar.
+        internal static bool Draw(Rect position, string label, ref Color value)
+        {
+            float peak = Mathf.Max(value.r, Mathf.Max(value.g, value.b));
+            float intensity = Mathf.Max(peak, 1f);
+            var unit = new Color(value.r / intensity, value.g / intensity, value.b / intensity, value.a);
+            bool wide = position.width >= 160f && !string.IsNullOrEmpty(label);
+            Rect swatch;
+            Rect hex;
+            if (wide)
+            {
+                var labelRect = position;
+                labelRect.width = Mathf.Max(0f, position.width - 96f);
+                swatch = new Rect(labelRect.xMax + 2f, position.y, 18f, position.height);
+                hex = new Rect(swatch.xMax + 2f, position.y, 70f, position.height);
+                EditorGUI.LabelField(labelRect, label);
+            }
+            else
+            {
+                swatch = new Rect(position.x, position.y, 18f, position.height);
+                hex = new Rect(swatch.xMax + 2f, position.y, Mathf.Max(0f, position.width - 20f), position.height);
+            }
+            EditorGUI.BeginChangeCheck();
+            Color picked = EditorGUI.ColorField(swatch, GUIContent.none, unit, true, true, false);
+            string currentHex = ColorUtility.ToHtmlStringRGB(unit);
+            string written = EditorGUI.TextField(hex, currentHex);
+            if (!EditorGUI.EndChangeCheck()) return false;
+            if (written != currentHex)
+            {
+                if (!ColorUtility.TryParseHtmlString("#" + written, out Color parsed)) return false;
+                value = new Color(parsed.r * intensity, parsed.g * intensity, parsed.b * intensity, value.a);
+                return true;
+            }
+            value = new Color(picked.r * intensity, picked.g * intensity, picked.b * intensity, picked.a);
+            return true;
         }
     }
 
@@ -2302,17 +2331,9 @@ namespace NW.FairyToon.Editor
             Rect row = EditorGUILayout.GetControlRect();
             BeginScope(row, prop);
             EditorGUI.showMixedValue = prop.hasMixedValue;
-            EditorGUI.BeginChangeCheck();
-            Rect label = row;
-            label.width = Mathf.Max(0f, row.width - 148f);
-            Rect swatch = new Rect(label.xMax + 4f, row.y, 18f, row.height);
-            Rect hex = new Rect(swatch.xMax + 4f, row.y, 122f, row.height);
-            EditorGUI.LabelField(label, FairyToonL10n.Property(prop.name, prop.displayName));
-            Color value = EditorGUI.ColorField(swatch, GUIContent.none, prop.colorValue, true, true, true);
-            string written = EditorGUI.TextField(hex, ColorUtility.ToHtmlStringRGB(value));
-            if (written != ColorUtility.ToHtmlStringRGB(value) && ColorUtility.TryParseHtmlString("#" + written, out Color parsed))
-                value = new Color(parsed.r, parsed.g, parsed.b, value.a);
-            if (EditorGUI.EndChangeCheck()) prop.colorValue = value;
+            Color value = prop.colorValue;
+            if (FairyToonHDRDrawer.Draw(row, FairyToonL10n.Property(prop.name, prop.displayName), ref value))
+                prop.colorValue = value;
             EditorGUI.showMixedValue = false;
             EndScope();
         }
