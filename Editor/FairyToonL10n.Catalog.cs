@@ -156,6 +156,8 @@ namespace NW.FairyToon.Editor
             Add("Direction", "Direction", "方向", "方向");
             Add("Specular", "Specular", "スペキュラ", "高光");
             Add("Decal", "Decal", "デカール", "贴花");
+            Add("sAsDecal", "As Decal", "As Decal", "As Decal");
+            Add("sMainUV", "UV Setting", "UV Setting", "UV Setting");
             Add("sMirrorMode", "Mirror Mode", "ミラーモード", "镜像模式");
             Add("sMirrorModeNormal", "Normal", "通常", "正常");
             Add("sMirrorModeFlip", "Flip", "反転", "翻转");

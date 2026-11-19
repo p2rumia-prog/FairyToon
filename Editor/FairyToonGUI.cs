@@ -89,6 +89,7 @@ namespace NW.FairyToon.Editor
         private const string PrefsPrefix = "NW.FairyToon.GUI.";
 
         private static GUIStyle s_HeaderLabel;
+        private static GUIStyle s_BoldFoldout;
         private static GUIStyle s_Box;
         private static GUIStyle s_Outer;
         private static GUIStyle s_Inner;
@@ -441,6 +442,7 @@ namespace NW.FairyToon.Editor
             Group("sBaseSetting");
             BaseSetting();
             Lighting();
+            UvSetting();
             Group("sColors");
             MainColor();
             if (Prop("_SheerAmount") != null) SheerFabric();
@@ -647,6 +649,16 @@ namespace NW.FairyToon.Editor
             return alpha ? "sColorAlpha" : "sColor";
         }
 
+        private void UvSetting()
+        {
+            // lilToon draws _MainTex scale and offset in UV Setting, after Lighting, not on the Color row.
+            if (Prop("_MainTex") == null) return;
+            if (!SearchAllows("_MainTex", "|ft.Tiling", "|ft.Offset", "|sMainUV")) return;
+            if (!BeginSection("UV", "sMainUV", null, false, null)) return;
+            ScaleOffset("_MainTex");
+            EndSection();
+        }
+
         private void Lighting()
         {
 
@@ -663,12 +675,12 @@ namespace NW.FairyToon.Editor
         {
             bool gem = EverySelectedIsGem();
             bool first = gem
-                ? SearchAllows("_MainTex", "_Color", "|ft.Tiling", "|ft.Offset")
-                : SearchAllows("_MainTex", "_Color", "_MainTexHSVG", "_MainColorAdjustMask", "|ft.Tiling", "|ft.Offset", "|sReset");
+                ? SearchAllows("_MainTex", "_Color")
+                : SearchAllows("_MainTex", "_Color", "_MainTexHSVG", "_MainColorAdjustMask", "|sReset", "|sColorAdjust", "|sMask");
             bool alpha = SearchAllows("_AlphaMaskMode", "_AlphaMask", "_AlphaMaskScale", "_AlphaMaskValue", "_Cutoff", "|sAlphaMaskWarnOpaque", "|ft.AlphaMaskInvert", "|ft.AlphaMaskTransparency", "|ft.AlphaMaskAdvanced")
                 || Phrase("Alpha Mask Scale") || Phrase("Alpha Mask Offset");
-            bool second = PrefixMatches("_Main2nd") || PrefixMatches("_FT_Main2nd") || SearchAllows("_Color2nd", "_UseMain2ndTex", "|UV Line Angle (radians)", "|Position / Direction (XY UV, XYZ Object, W UV Angle)", "|ft.Tiling", "|ft.Offset", "|Decal", "|sMirrorMode", "|sCopyMode", "|sPositionX", "|sPositionY", "|sScaleX", "|sScaleY", "|sScroll", "|sRotate", "|sDissolveMode");
-            bool third = PrefixMatches("_Main3rd") || PrefixMatches("_FT_Main3rd") || SearchAllows("_Color3rd", "_UseMain3rdTex", "|UV Line Angle (radians)", "|Position / Direction (XY UV, XYZ Object, W UV Angle)", "|ft.Tiling", "|ft.Offset", "|Decal", "|sMirrorMode", "|sCopyMode", "|sPositionX", "|sPositionY", "|sScaleX", "|sScaleY", "|sScroll", "|sRotate", "|sDissolveMode");
+            bool second = PrefixMatches("_Main2nd") || PrefixMatches("_FT_Main2nd") || SearchAllows("_Color2nd", "_UseMain2ndTex", "|UV Line Angle (radians)", "|Position / Direction (XY UV, XYZ Object, W UV Angle)", "|ft.Tiling", "|ft.Offset", "|sAsDecal", "|Decal", "|sMirrorMode", "|sCopyMode", "|sPositionX", "|sPositionY", "|sScaleX", "|sScaleY", "|sScroll", "|sRotate", "|sDissolveMode");
+            bool third = PrefixMatches("_Main3rd") || PrefixMatches("_FT_Main3rd") || SearchAllows("_Color3rd", "_UseMain3rdTex", "|UV Line Angle (radians)", "|Position / Direction (XY UV, XYZ Object, W UV Angle)", "|ft.Tiling", "|ft.Offset", "|sAsDecal", "|Decal", "|sMirrorMode", "|sCopyMode", "|sPositionX", "|sPositionY", "|sScaleX", "|sScaleY", "|sScroll", "|sRotate", "|sDissolveMode");
             if (Searching && !first && !alpha && !second && !third) return;
             if (!BeginSection("Main", "sMainColorSetting", null, true, PropertyBlock.MainColor, true, false)) return;
             if (first) MainColorFirst();
@@ -683,30 +695,29 @@ namespace NW.FairyToon.Editor
             // lilToon draws this group directly under the parent, with a label and gear, not another foldout.
             BeginGearRow("sMainColor", PropertyBlock.MainColor1st);
             Tex("_MainTex", "_Color", MainColorLabel());
-            ScaleOffset("_MainTex");
             if (!EverySelectedIsGem())
             {
                 Separator();
                 string adjustKey = PrefsPrefix + "Foldout.MainAdjust";
-                bool adjust = EditorGUILayout.Foldout(EditorPrefs.GetBool(adjustKey, false), FairyToonL10n.Text("sColorAdjust"), true);
+                bool adjust = EditorGUILayout.Foldout(EditorPrefs.GetBool(adjustKey, false), FairyToonL10n.Text("sColorAdjust"), true, s_BoldFoldout);
                 if (adjust != EditorPrefs.GetBool(adjustKey, false)) EditorPrefs.SetBool(adjustKey, adjust);
                 if (adjust || Searching)
                 {
                     // lilToon draws the mask, then a bold indented HSV / Gamma with its own reset.
-                    Tex("_MainColorAdjustMask", null, "Color Adjustment Mask");
+                    Tex("_MainColorAdjustMask", null, "sMask");
                     if (!Searching || RowVisible("_MainTexHSVG", "Hue / Saturation / Value / Gamma") || Hit("HSV / Gamma"))
                     {
                         EditorGUI.indentLevel++;
                         EditorGUILayout.LabelField("HSV / Gamma", EditorStyles.boldLabel);
                         EditorGUI.indentLevel++;
                         HsvgSliders("_MainTexHSVG");
-                        var hsvg = Prop("_MainTexHSVG");
-                        if (hsvg != null && (!Searching || LabelOnly("sReset")) && GUILayout.Button(FairyToonL10n.Text("sReset")))
-                            hsvg.vectorValue = new Vector4(0f, 1f, 1f, 1f);
                         EditorGUI.indentLevel--;
                         Separator();
                         EditorGUI.indentLevel--;
                     }
+                    var hsvg = Prop("_MainTexHSVG");
+                    if (hsvg != null && (!Searching || LabelOnly("sReset")) && GUILayout.Button(FairyToonL10n.Text("sReset")))
+                        hsvg.vectorValue = new Vector4(0f, 1f, 1f, 1f);
                 }
             }
             EndGearRow();
@@ -720,7 +731,7 @@ namespace NW.FairyToon.Editor
             bool opaque = PrimaryMode() == FairyToonMaterialSetup.Opaque && !mixedCoverage;
             if (opaque)
             {
-                Help("sAlphaMaskWarnOpaque", MessageType.Info);
+                EditorGUILayout.LabelField(FairyToonL10n.Text("sAlphaMaskWarnOpaque"), EditorStyles.wordWrappedLabel);
                 return;
             }
             if (!OpenBox(FairyToonL10n.Text("sAlphaMask"), null, PropertyBlock.AlphaMask)) return;
@@ -840,13 +851,13 @@ namespace NW.FairyToon.Editor
             var flipMirror = Prop(prefix + "TexShouldFlipMirror");
             var flipCopy = Prop(prefix + "TexShouldFlipCopy");
             if (isDecal == null || left == null || right == null || copy == null || flipMirror == null || flipCopy == null) return;
-            if (!Searching || RowVisible(isDecal.name, "Decal"))
+            if (!Searching || RowVisible(isDecal.name, "sAsDecal"))
             {
                 Rect row = EditorGUILayout.GetControlRect();
                 BeginScope(row, isDecal);
                 EditorGUI.showMixedValue = isDecal.hasMixedValue;
                 EditorGUI.BeginChangeCheck();
-                bool on = EditorGUI.Toggle(row, FairyToonL10n.Text("Decal"), Number(isDecal) > 0.5f);
+                bool on = EditorGUI.Toggle(row, FairyToonL10n.Text("sAsDecal"), Number(isDecal) > 0.5f);
                 if (EditorGUI.EndChangeCheck())
                 {
                     SetNumber(isDecal, on ? 1f : 0f);
@@ -1865,6 +1876,7 @@ namespace NW.FairyToon.Editor
             P("_GemChromaticAberration", "sChromaticAberration");
             P("_GemEnvContrast", "sContrast");
             P("_GemEnvColor", "sEnvironmentColor");
+            Separator();
             P("_GemParticleLoop", "sParticleLoop");
             P("_GemParticleColor", "sColor");
             EditorGUI.indentLevel--;
@@ -3275,6 +3287,7 @@ namespace NW.FairyToon.Editor
                 };
             }
             s_HeaderLabel = new GUIStyle(EditorStyles.label) { alignment = TextAnchor.MiddleLeft, fontStyle = FontStyle.Normal };
+            s_BoldFoldout = new GUIStyle(EditorStyles.foldout) { fontStyle = FontStyle.Bold };
             s_HeaderLabel.normal.textColor = s_Foldout.normal.textColor;
             // Section boxes use lilToon's 12px GUI textures. The header gap is the outer top margin.
             s_Line = s_ProSkin ? new Color(0.35f, 0.35f, 0.35f, 1f) : new Color(0.4f, 0.4f, 0.4f, 1f);
