@@ -106,6 +106,7 @@ namespace NW.FairyToon.Editor
         private static Color s_Line;
         private bool m_AlphaMaskAdvanced;
         private int m_InnerDepth;
+        private int m_Verticals;
         private readonly List<bool> m_Frames = new List<bool>();
         private static bool s_ProSkin;
         private static string s_Search = "";
@@ -286,6 +287,7 @@ namespace NW.FairyToon.Editor
             {
                 RestoreCallbacks(wrapped);
                 s_InspectorPass = false;
+                while (m_Verticals > 0) PopVertical();
                 m_InnerDepth = 0;
                 m_Frames.Clear();
                 if (exitGui)
@@ -1033,13 +1035,16 @@ namespace NW.FairyToon.Editor
             }
             Rect row = EditorGUILayout.GetControlRect();
             BeginScope(row, property);
-            EditorGUI.BeginChangeCheck();
-            value[component] = options != null
-            ? EditorGUI.Popup(row, shown, Mathf.RoundToInt(value[component]), localized)
-            : slider ? EditorGUI.Slider(row, shown, value[component], minimum, maximum)
-            : EditorGUI.FloatField(row, shown, value[component]);
-            if (EditorGUI.EndChangeCheck()) SetDissolveComponents(property, value, 1 << component);
-            EndScope();
+            try
+            {
+                EditorGUI.BeginChangeCheck();
+                value[component] = options != null
+                ? EditorGUI.Popup(row, shown, Mathf.RoundToInt(value[component]), localized)
+                : slider ? EditorGUI.Slider(row, shown, value[component], minimum, maximum)
+                : EditorGUI.FloatField(row, shown, value[component]);
+                if (EditorGUI.EndChangeCheck()) SetDissolveComponents(property, value, 1 << component);
+            }
+            finally { EndScope(); }
             EditorGUI.showMixedValue = previousMixed;
         }
 
@@ -1049,6 +1054,8 @@ namespace NW.FairyToon.Editor
             if (scope == null || !RowVisible(name, label)) return;
             Rect row = EditorGUILayout.GetControlRect();
             BeginScope(row, scope);
+            try
+            {
             Rect values = EditorGUI.PrefixLabel(row, new GUIContent(FairyToonL10n.Text(label)));
             bool previousMixed = EditorGUI.showMixedValue;
             using (var axes = new AxisFieldScope(values, dimensions))
@@ -1065,7 +1072,8 @@ namespace NW.FairyToon.Editor
                 }
             }
             EditorGUI.showMixedValue = previousMixed;
-            EndScope();
+            }
+            finally { EndScope(); }
         }
         private static bool DissolveComponentMixed(MaterialProperty property, int component)
         {
@@ -2060,9 +2068,9 @@ namespace NW.FairyToon.Editor
             }
             if (fur)
             {
-                EditorGUILayout.BeginVertical(s_Outer);
+                PushVertical(s_Outer);
                 EditorGUILayout.LabelField(FairyToonL10n.Text("sFur"));
-                EditorGUILayout.BeginVertical(s_InnerFull);
+                PushVertical(s_InnerFull);
                 IntPopup("_FurCull", "sCullMode", "sCullModeOff", "sCullModeFront", "sCullModeBack");
                 P("_FurZClip");
                 P("_FurZTest");
@@ -2082,8 +2090,8 @@ namespace NW.FairyToon.Editor
                     P("_FurZWrite");
                     P("_FurAlphaToMask");
                 }
-                EditorGUILayout.EndVertical();
-                EditorGUILayout.EndVertical();
+                PopVertical();
+                PopVertical();
             }
             // lilToon puts Outline Cull in its own box under Rendering. FairyToon has no separate outline ZTest or colour mask.
             bool outline = Prop("_OutlineCull") != null
@@ -2091,12 +2099,12 @@ namespace NW.FairyToon.Editor
                 && !SelectedRenderingMode(FairyToonMaterialSetup.Gem)
                 && (!Searching || RowVisible("_OutlineCull", "sCullMode"));
             if (!outline) return;
-            EditorGUILayout.BeginVertical(s_Outer);
+            PushVertical(s_Outer);
             EditorGUILayout.LabelField(FairyToonL10n.Text("sOutlineSetting"));
-            EditorGUILayout.BeginVertical(s_InnerFull);
+            PushVertical(s_InnerFull);
             P("_OutlineCull", "sCullMode");
-            EditorGUILayout.EndVertical();
-            EditorGUILayout.EndVertical();
+            PopVertical();
+            PopVertical();
         }
 
         // ---- Layout helpers ----
@@ -2270,7 +2278,7 @@ namespace NW.FairyToon.Editor
         private bool OpenBox(string shown, MaterialProperty toggle, PropertyBlock? block, bool full = false)
         {
             HeaderGap();
-            EditorGUILayout.BeginVertical(s_Outer);
+            PushVertical(s_Outer);
             Rect row = GUILayoutUtility.GetRect(16f, 22f, GUILayout.ExpandWidth(true));
             float x = row.x + 1f;
             bool enabled = true;
@@ -2278,12 +2286,18 @@ namespace NW.FairyToon.Editor
             {
                 Rect toggleRect = new Rect(x, row.y + 3f, 16f, 16f);
                 BeginScope(toggleRect, toggle);
-                EditorGUI.showMixedValue = toggle.hasMixedValue;
-                EditorGUI.BeginChangeCheck();
-                bool value = EditorGUI.Toggle(toggleRect, Number(toggle) > 0.5f);
-                if (EditorGUI.EndChangeCheck()) SetNumber(toggle, value ? 1f : 0f);
-                EditorGUI.showMixedValue = false;
-                EndScope();
+                try
+                {
+                    EditorGUI.showMixedValue = toggle.hasMixedValue;
+                    EditorGUI.BeginChangeCheck();
+                    bool value = EditorGUI.Toggle(toggleRect, Number(toggle) > 0.5f);
+                    if (EditorGUI.EndChangeCheck()) SetNumber(toggle, value ? 1f : 0f);
+                }
+                finally
+                {
+                    EditorGUI.showMixedValue = false;
+                    EndScope();
+                }
                 enabled = toggle.hasMixedValue || Number(toggle) > 0.5f;
                 x += 20f;
             }
@@ -2293,10 +2307,10 @@ namespace NW.FairyToon.Editor
                 FairyToonClipboard.ShowMenu(block.Value, m_Editor, () => m_Props);
             if (!enabled)
             {
-                EditorGUILayout.EndVertical();
+                PopVertical();
                 return false;
             }
-            EditorGUILayout.BeginVertical(full ? s_InnerFull : s_InnerHalf);
+            PushVertical(full ? s_InnerFull : s_InnerHalf);
             m_InnerDepth++;
             return true;
         }
@@ -2305,7 +2319,7 @@ namespace NW.FairyToon.Editor
         {
             // lilToon's untitled Base box is only customBox: a 1px edge, not the solid outer frame around it.
             HeaderGap();
-            EditorGUILayout.BeginVertical(s_Custom);
+            PushVertical(s_Custom);
         }
 
         // 2 points is 3 px at 150%. A box margin is collapsed or covered by the header shadow, so this is an empty row.
@@ -2314,14 +2328,27 @@ namespace NW.FairyToon.Editor
             GUILayoutUtility.GetRect(0f, 2f, GUILayout.ExpandWidth(true));
         }
 
+        private void PushVertical(GUIStyle style)
+        {
+            EditorGUILayout.BeginVertical(style);
+            m_Verticals++;
+        }
+
+        private void PopVertical()
+        {
+            if (m_Verticals <= 0) return;
+            EditorGUILayout.EndVertical();
+            m_Verticals--;
+        }
+
         private void CloseBox()
         {
             if (m_InnerDepth > 0)
             {
-                EditorGUILayout.EndVertical();
+                PopVertical();
                 m_InnerDepth--;
             }
-            EditorGUILayout.EndVertical();
+            PopVertical();
         }
 
         private void EndSection()
@@ -3165,12 +3192,18 @@ namespace NW.FairyToon.Editor
             if (!RowVisible(name, shown, null)) return;
             Rect row = EditorGUILayout.GetControlRect();
             BeginScope(row, prop);
-            EditorGUI.showMixedValue = prop.hasMixedValue;
-            EditorGUI.BeginChangeCheck();
-            bool value = EditorGUI.ToggleLeft(row, new GUIContent(shown), Number(prop) > 0.5f);
-            if (EditorGUI.EndChangeCheck()) SetNumber(prop, value ? 1f : 0f);
-            EditorGUI.showMixedValue = false;
-            EndScope();
+            try
+            {
+                EditorGUI.showMixedValue = prop.hasMixedValue;
+                EditorGUI.BeginChangeCheck();
+                bool value = EditorGUI.ToggleLeft(row, new GUIContent(shown), Number(prop) > 0.5f);
+                if (EditorGUI.EndChangeCheck()) SetNumber(prop, value ? 1f : 0f);
+            }
+            finally
+            {
+                EditorGUI.showMixedValue = false;
+                EndScope();
+            }
         }
 
         private void TexWideColor(string texture, string colorName, string label)
@@ -3216,21 +3249,27 @@ namespace NW.FairyToon.Editor
                 if (slot.xMin < row.x) slot.xMin = row.x;
             }
             BeginScope(slot, other);
-            EditorGUI.showMixedValue = other.hasMixedValue;
-            if (hdr)
+            try
             {
-                Color color = other.colorValue;
-                if (FairyToonHDRDrawer.Draw(wrap ? row : slot, null, ref color, wrap ? slot : default)) other.colorValue = color;
+                EditorGUI.showMixedValue = other.hasMixedValue;
+                if (hdr)
+                {
+                    Color color = other.colorValue;
+                    if (FairyToonHDRDrawer.Draw(wrap ? row : slot, null, ref color, wrap ? slot : default)) other.colorValue = color;
+                }
+                else
+                {
+                    var swatch = new Rect(slot.xMax - 50f, slot.y, 50f, slot.height);
+                    EditorGUI.BeginChangeCheck();
+                    Color color = EditorGUI.ColorField(swatch, GUIContent.none, other.colorValue, true, true, false);
+                    if (EditorGUI.EndChangeCheck()) other.colorValue = color;
+                }
             }
-            else
+            finally
             {
-                var swatch = new Rect(slot.xMax - 50f, slot.y, 50f, slot.height);
-                EditorGUI.BeginChangeCheck();
-                Color color = EditorGUI.ColorField(swatch, GUIContent.none, other.colorValue, true, true, false);
-                if (EditorGUI.EndChangeCheck()) other.colorValue = color;
+                EditorGUI.showMixedValue = false;
+                EndScope();
             }
-            EditorGUI.showMixedValue = false;
-            EndScope();
             return true;
         }
 
