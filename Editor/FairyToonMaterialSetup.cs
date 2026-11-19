@@ -153,7 +153,7 @@ namespace NW.FairyToon.Editor
         }
 
         // Cutout shells write depth and mask. Transparent and two-pass shells do not. Ordinary Apply leaves a later edit alone.
-        static void SetFurShellDefaults(Material material, int furMode)
+        internal static void SetFurShellDefaults(Material material, int furMode)
         {
             bool cutout = furMode == FurCutout;
             if (material.HasProperty("_FurZWrite")) material.SetFloat("_FurZWrite", cutout ? 1f : 0f);
@@ -166,7 +166,7 @@ namespace NW.FairyToon.Editor
             if (material.HasProperty("_FurDstBlendAlpha")) material.SetInt("_FurDstBlendAlpha", (int)BlendMode.OneMinusSrcAlpha);
         }
 
-        public static void Apply(Material material)
+        public static void Apply(Material material, bool writeCoverageBlends = true)
         {
             if (material == null || !IsFairyToonShader(material.shader)) return;
 
@@ -194,23 +194,29 @@ namespace NW.FairyToon.Editor
             SetKeyword(material, "_SURFACE_TYPE_TRANSPARENT", mode == Transparent);
             if (mode == Transparent)
             {
-                material.SetInt("_SrcBlend", (int)BlendMode.SrcAlpha);
-                material.SetInt("_DstBlend", (int)BlendMode.OneMinusSrcAlpha);
-                material.SetInt("_SrcBlendAlpha", (int)BlendMode.One);
-                material.SetInt("_DstBlendAlpha", (int)BlendMode.OneMinusSrcAlpha);
+                if (writeCoverageBlends)
+                {
+                    material.SetInt("_SrcBlend", (int)BlendMode.SrcAlpha);
+                    material.SetInt("_DstBlend", (int)BlendMode.OneMinusSrcAlpha);
+                    material.SetInt("_SrcBlendAlpha", (int)BlendMode.One);
+                    material.SetInt("_DstBlendAlpha", (int)BlendMode.OneMinusSrcAlpha);
+                }
                 material.SetInt("_AlphaToMask", 0);
                 material.SetOverrideTag("RenderType", "Transparent");
             }
             else
             {
-                material.SetInt("_SrcBlend", (int)BlendMode.One);
-                material.SetInt("_DstBlend", (int)BlendMode.Zero);
-                material.SetInt("_SrcBlendAlpha", (int)BlendMode.One);
-                material.SetInt("_DstBlendAlpha", (int)BlendMode.Zero);
+                if (writeCoverageBlends)
+                {
+                    material.SetInt("_SrcBlend", (int)BlendMode.One);
+                    material.SetInt("_DstBlend", (int)BlendMode.Zero);
+                    material.SetInt("_SrcBlendAlpha", (int)BlendMode.One);
+                    material.SetInt("_DstBlendAlpha", (int)BlendMode.Zero);
+                }
                 if (mode == Opaque) material.SetInt("_AlphaToMask", 0);
                 material.SetOverrideTag("RenderType", mode == Cutout ? "TransparentCutout" : "Opaque");
             }
-            if (gem)
+            if (gem && writeCoverageBlends)
             {
                 // PRE clears the silhouette; every front/interior face then accumulates, as in lilToon Gem.
                 material.SetInt("_SrcBlend", (int)BlendMode.One);
@@ -227,10 +233,13 @@ namespace NW.FairyToon.Editor
                 // The base surface and shell geometry have independent render states, as in lilToon's URP Fur.
                 // lilToon's LIL_RENDER 2 body returns premultiplied RGB under One/OneMinusSrcAlpha.
                 // FairyToon returns straight RGB, so SrcAlpha produces the same framebuffer contribution.
-                material.SetInt("_SrcBlend", mode == Transparent ? (int)BlendMode.SrcAlpha : (int)BlendMode.One);
-                material.SetInt("_DstBlend", mode == Transparent ? (int)BlendMode.OneMinusSrcAlpha : (int)BlendMode.Zero);
-                material.SetInt("_SrcBlendAlpha", (int)BlendMode.One);
-                material.SetInt("_DstBlendAlpha", (int)BlendMode.OneMinusSrcAlpha);
+                if (writeCoverageBlends)
+                {
+                    material.SetInt("_SrcBlend", mode == Transparent ? (int)BlendMode.SrcAlpha : (int)BlendMode.One);
+                    material.SetInt("_DstBlend", mode == Transparent ? (int)BlendMode.OneMinusSrcAlpha : (int)BlendMode.Zero);
+                    material.SetInt("_SrcBlendAlpha", (int)BlendMode.One);
+                    material.SetInt("_DstBlendAlpha", (int)BlendMode.OneMinusSrcAlpha);
+                }
                 material.SetInt("_ZWrite", 1);
                 material.SetInt("_AlphaToMask", furMode == FurCutout ? 1 : 0);
             }

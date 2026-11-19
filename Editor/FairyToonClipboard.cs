@@ -174,11 +174,14 @@ namespace NW.FairyToon.Editor
             {
                 try
                 {
-                    FairyToonGUI.CollectMenuAssetChanges();
-                    if (!(callback && !FairyToonGUI.WroteAsset))
+                    if (menuFrame != 0)
                     {
-                        MigrateCoverage(coverage);
-                        ApplyMaterials(editor);
+                        FairyToonGUI.CollectMenuAssetChanges();
+                        if (!(callback && !FairyToonGUI.WroteAsset))
+                        {
+                            MigrateCoverage(coverage);
+                            ApplyMaterials(editor);
+                        }
                     }
                 }
                 finally
@@ -400,7 +403,7 @@ namespace NW.FairyToon.Editor
         {
             foreach (UnityEngine.Object target in editor.targets)
                 if (FairyToonGUI.TargetWroteAsset(target))
-                    FairyToonMaterialSetup.Apply(target as Material);
+                    FairyToonMaterialSetup.Apply(target as Material, false);
             editor.PropertiesChanged();
         }
     }

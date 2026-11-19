@@ -167,7 +167,11 @@ namespace NW.FairyToon.Editor
                         ? FairyToonMaterialSetup.Cutout : FairyToonMaterialSetup.Transparent);
                 target.SetFloat("_UseOutline", variant.Outline ? 1f : 0f);
                 if (variant.Mode == FairyToonMaterialSetup.Refraction) target.SetFloat("_RefractionBlur", variant.Blur ? 1f : 0f);
-                if (variant.Mode == FairyToonMaterialSetup.Fur) target.SetFloat("_FurMode", variant.FurMode);
+                if (variant.Mode == FairyToonMaterialSetup.Fur)
+                {
+                    target.SetFloat("_FurMode", variant.FurMode);
+                    FairyToonMaterialSetup.SetFurShellDefaults(target, variant.FurMode);
+                }
                 // Preserve the effective source order as an explicit queue, even when it matches this shader's default.
                 // Apply preserves authored offsets; lilToon defaults include Transparent 2460 and Refraction 2900.
                 if (snapshot.renderQueue != target.renderQueue)
