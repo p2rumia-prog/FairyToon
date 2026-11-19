@@ -67,6 +67,17 @@ namespace NW.FairyToon.Editor
             material.renderQueue = useDefaultQueue ? GetDefaultRenderQueue(mode) : previousQueue;
         }
 
+        /// <summary>Rebuilds the current mode's queue, instancing and keywords. Unlike <see cref="SetRenderingMode"/>, the same mode is not a no-op.</summary>
+        public static void ResetRendering(Material material)
+        {
+            if (material == null || !IsFairyToonShader(material.shader)) return;
+            int mode = GetRenderingMode(material);
+            int furMode = Mathf.Clamp(Mathf.RoundToInt(Get(material, "_FurMode")), FurTransparent, FurTwoPass);
+            material.enableInstancing = false;
+            material.renderQueue = GetDefaultRenderQueue(mode, furMode);
+            Apply(material);
+        }
+
         public static bool SetRenderingMode(Material material, int renderingMode)
         {
             if (material == null || !IsFairyToonShader(material.shader)) return false;

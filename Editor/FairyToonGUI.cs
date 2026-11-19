@@ -1829,8 +1829,7 @@ namespace NW.FairyToon.Editor
                 {
                     var material = target as Material;
                     if (material == null) continue;
-                    material.enableInstancing = false;
-                    FairyToonMaterialSetup.SetRenderingMode(material, FairyToonMaterialSetup.GetRenderingMode(material));
+                    FairyToonMaterialSetup.ResetRendering(material);
                 }
                 m_Props = MaterialEditor.GetMaterialProperties(m_Editor.targets);
             }
