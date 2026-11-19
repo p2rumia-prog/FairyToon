@@ -3144,7 +3144,8 @@ namespace NW.FairyToon.Editor
             bool colorExtra = other != null && other.propertyType == ShaderPropertyType.Color;
             bool hdr = colorExtra && (IsGammaHdr(extra) || IsBuiltinHdr(extra));
             bool wrap = hdr && NarrowHdrRow();
-            Rect row = m_Editor.TexturePropertySingleLine(content, tex, colorExtra && !hdr ? other : null);
+            // A range or float rides in the texture row. Colours are drawn afterwards so HDR can wrap.
+            Rect row = m_Editor.TexturePropertySingleLine(content, tex, colorExtra ? null : other);
             if (!colorExtra) return true;
             Rect slot = wrap ? EditorGUILayout.GetControlRect() : row;
             if (!wrap)
