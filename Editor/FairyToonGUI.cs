@@ -2236,7 +2236,6 @@ namespace NW.FairyToon.Editor
         // Outer fill is the measured title-bar colour. The inner fill is the darker content, inset so the outer colour reads as a 2px outline.
         private bool OpenBox(string shown, MaterialProperty toggle, PropertyBlock? block, bool full = false)
         {
-            EditorGUILayout.Space(2f);
             EditorGUILayout.BeginVertical(s_Outer);
             Rect row = GUILayoutUtility.GetRect(16f, 22f, GUILayout.ExpandWidth(true));
             float x = row.x + 1f;
@@ -2270,7 +2269,6 @@ namespace NW.FairyToon.Editor
 
         private void OpenContentBox()
         {
-            EditorGUILayout.Space(2f);
             EditorGUILayout.BeginVertical(s_Outer);
             EditorGUILayout.BeginVertical(s_Custom);
             m_InnerDepth++;
@@ -3283,7 +3281,8 @@ namespace NW.FairyToon.Editor
             s_Line = s_ProSkin ? new Color(0.35f, 0.35f, 0.35f, 1f) : new Color(0.4f, 0.4f, 0.4f, 1f);
             string skin = s_ProSkin ? "dark" : "light";
             s_Outer = BoxStyle(4, 4, 2, GuiBox("gui_box_outer_" + skin));
-            s_Outer.margin.top = 0;
+            // 2 points is 3 px at 150%, the measured gap from the section header to the box.
+            s_Outer.margin = new RectOffset(4, 4, 2, 4);
             s_InnerHalf = BoxStyle(4, 2, 2, GuiBox("gui_box_inner_half_" + skin));
             s_InnerFull = BoxStyle(4, 2, 2, GuiBox("gui_box_inner_" + skin));
             s_Custom = BoxStyle(6, 4, 4, GuiBox("gui_custom_box_" + skin));
