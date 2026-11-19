@@ -105,11 +105,8 @@ namespace NW.FairyToon.Editor
             var coverage = SnapshotCoverage(editor);
             if (!PasteWouldChange(block, material, props, shouldCopyTex, out bool callback)) return;
             string undo = shouldCopyTex ? "FairyToon Paste (with textures)" : "FairyToon Paste";
-            bool direct = !callback && !AnimationMode.InAnimationMode();
+            bool direct = !callback;
             int group = direct ? BeginUndo(editor, undo) : 0;
-            if (!direct) FairyToonGUI.SuppressValidation();
-            try
-            {
             for (int i = 0; i < FairyToonPropertyBlocks.All.Length; i++)
             {
                 FairyToonPropertyEntry entry = FairyToonPropertyBlocks.All[i];
@@ -120,18 +117,21 @@ namespace NW.FairyToon.Editor
                 if (dest != null && ChangesValue(dest, source)) ApplyValue(dest, source);
                 if (!entry.IsTexture || !shouldCopyTex) continue;
                 string st = entry.Name + "_ST";
-                if (CopiedVectorProperties.TryGetValue(st, out Vector4 scale) && material.HasProperty(st) && material.GetVector(st) != scale)
-                    material.SetVector(st, scale);
+                if (!CopiedVectorProperties.TryGetValue(st, out Vector4 scale) || !material.HasProperty(st) || material.GetVector(st) == scale)
+                    continue;
+                // A callback keeps the texture write off the asset. The scale is still a direct write and must undo.
+                if (!direct)
+                {
+                    Undo.IncrementCurrentGroup();
+                    Undo.SetCurrentGroupName(undo);
+                    Undo.RecordObject(material, undo);
+                }
+                material.SetVector(st, scale);
             }
-            }
-            finally
-            {
-                if (!direct) FairyToonGUI.ResumeValidation();
-            }
-            if (!direct) return;
+            if (callback && !FairyToonGUI.WroteAsset) return;
             MigrateCoverage(coverage);
             ApplyMaterials(editor);
-            Undo.CollapseUndoOperations(group);
+            if (direct) Undo.CollapseUndoOperations(group);
         }
 
         internal static void ResetProperties(PropertyBlock block, MaterialEditor editor, MaterialProperty[] props)
@@ -139,26 +139,18 @@ namespace NW.FairyToon.Editor
             if (props == null) return;
             var coverage = SnapshotCoverage(editor);
             if (!ResetWouldChange(block, props, out bool callback)) return;
-            bool direct = !callback && !AnimationMode.InAnimationMode();
+            bool direct = !callback;
             int group = direct ? BeginUndo(editor, "FairyToon Reset") : 0;
-            if (!direct) FairyToonGUI.SuppressValidation();
-            try
-            {
             for (int i = 0; i < props.Length; i++)
             {
                 MaterialProperty prop = props[i];
                 if (!ResetTarget(prop, block, out Shader shader, out int index) || AlreadyDefault(prop, shader, index)) continue;
                 ApplyDefault(prop, shader, index);
             }
-            }
-            finally
-            {
-                if (!direct) FairyToonGUI.ResumeValidation();
-            }
-            if (!direct) return;
+            if (callback && !FairyToonGUI.WroteAsset) return;
             MigrateCoverage(coverage);
             ApplyMaterials(editor);
-            Undo.CollapseUndoOperations(group);
+            if (direct) Undo.CollapseUndoOperations(group);
         }
 
         private static bool PasteWouldChange(PropertyBlock block, Material material, MaterialProperty[] props, bool shouldCopyTex, out bool callback)
@@ -171,9 +163,11 @@ namespace NW.FairyToon.Editor
                 if (!Contains(entry, block) || (!shouldCopyTex && entry.IsTexture)) continue;
                 if (!CopiedProperties.TryGetValue(entry.Name, out MaterialProperty source) || source == null) continue;
                 MaterialProperty dest = Find(props, entry.Name);
-                if (dest == null) continue;
-                if (dest.applyPropertyCallback != null) callback = true;
-                if (ChangesValue(dest, source)) change = true;
+                if (dest != null)
+                {
+                    if (dest.applyPropertyCallback != null) callback = true;
+                    if (ChangesValue(dest, source)) change = true;
+                }
                 if (!shouldCopyTex || !entry.IsTexture) continue;
                 string st = entry.Name + "_ST";
                 if (CopiedVectorProperties.TryGetValue(st, out Vector4 scale) && material.HasProperty(st) && material.GetVector(st) != scale)

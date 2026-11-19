@@ -2,7 +2,7 @@
 
 ## 0.2.1
 
-- Inspector only. Advanced / Preset / Shader Setting replace Simple / Advanced. Search matches the drawn label and tooltip, not only the property name. Main Color 1st is a label and gear. Alpha Mask puts its gear on the Mode row, including on Refraction, and shows only a warning on Opaque. Scalar reads follow ShaderLab: legacy `Int` is a float, `Integer` is a real int. Paste and Reset do nothing when the values already match, do not Apply while an animation or property-block callback owns the write, and otherwise migrate the coverage queue in that undo step. Language can follow the editor. No shader or material-default change.
+- Inspector only. Advanced / Preset / Shader Setting replace Simple / Advanced. Search matches the drawn label and tooltip, not only the property name. Main Color 1st is a label and gear; Color Adjust shows the mask, then hue / saturation / value / gamma, with a reset. Alpha Mask puts its gear on the Mode row, including on Refraction, and shows only a warning on Opaque. Scalar reads follow ShaderLab: legacy `Int` is a float, `Integer` is a real int. Paste and Reset do nothing when the values already match. Keyword sync runs when a property write hits the asset, including animation mode with no callback, and is skipped only when `applyPropertyCallback` returns true. Texture scale still copies to the first target and can be undone. Rendering uses Unity's queue, instancing, and double-sided GI controls. Language can follow the editor. No shader or material-default change.
 
 ## 0.2.0 (2026-11-17)
 

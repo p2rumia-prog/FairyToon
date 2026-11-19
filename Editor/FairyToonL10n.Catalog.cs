@@ -1110,6 +1110,8 @@ namespace NW.FairyToon.Editor
             Add("ft.DissolveRadial", "Radial", "放射", "径向");
             Add("ft.DissolveLinear", "Linear", "線形", "线性");
             Add("sColorAdjust", "Color Adjust", "色調補正", "色调校正");
+            Add("ft.Tiling", "Tiling", "タイリング", "平铺");
+            Add("ft.Offset", "Offset", "オフセット", "偏移");
             Add("Off", "Off", "Off (両面を描画)", "关闭");
             Add("Front", "Front", "Front (裏面のみ描画)", "正面");
             Add("Back", "Back", "Back (前面のみ描画)", "背面");

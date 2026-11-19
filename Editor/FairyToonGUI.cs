@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.Reflection;
 using UnityEditor;
 using UnityEngine;
@@ -42,20 +43,32 @@ namespace NW.FairyToon.Editor
         private MaterialEditor m_Editor;
         private MaterialProperty[] m_Props;
 
-        private static int s_SuppressValidation;
+        // Set by a wrapped applyPropertyCallback when that callback returns true (it kept the write).
+        // Unity still calls ValidateMaterial afterwards, and MaterialEditor calls it again after OnGUI.
+        private static bool s_CallbackConsumedWrite;
+        private static bool s_DirectAssetWrite;
+        private static bool s_SkipAssetValidation;
 
-        internal static void SuppressValidation() => s_SuppressValidation++;
+        internal static bool WroteAsset => s_DirectAssetWrite;
 
-        internal static void ResumeValidation()
+        internal static void NoteCallbackResult(bool handled)
         {
-            if (s_SuppressValidation > 0) s_SuppressValidation--;
+            if (handled) s_CallbackConsumedWrite = true;
+            else s_DirectAssetWrite = true;
         }
 
         public override void ValidateMaterial(Material material)
         {
-            // Unity calls this from MaterialProperty.ApplyProperty even when an animation or
-            // MaterialPropertyBlock callback already consumed the write. Applying then rewrites the asset.
-            if (s_SuppressValidation > 0 || AnimationMode.InAnimationMode()) return;
+            // ApplyProperty calls this even when the callback already stored the edit.
+            // A missing callback, or one that returns false, wrote the asset and must refresh keywords.
+            if (s_CallbackConsumedWrite)
+            {
+                s_CallbackConsumedWrite = false;
+                return;
+            }
+            if (s_SkipAssetValidation && !s_DirectAssetWrite) return;
+            s_DirectAssetWrite = true;
+            s_SkipAssetValidation = false;
             FairyToonMaterialSetup.Apply(material);
         }
 
@@ -69,11 +82,14 @@ namespace NW.FairyToon.Editor
         {
             m_Editor = materialEditor;
             m_Props = properties;
-            bool callbackOwned = AnimationMode.InAnimationMode();
-            if (!callbackOwned && properties != null)
+            s_CallbackConsumedWrite = false;
+            s_DirectAssetWrite = false;
+            s_HadConsumed = false;
+            s_SkipAssetValidation = false;
+            var wrapped = new List<SavedCallback>();
+            if (properties != null)
                 for (int i = 0; i < properties.Length; i++)
-                    if (properties[i] != null && properties[i].applyPropertyCallback != null) { callbackOwned = true; break; }
-            if (callbackOwned) SuppressValidation();
+                    WrapCallback(properties[i], wrapped);
             try
             {
                 InitStyles();
@@ -98,8 +114,39 @@ namespace NW.FairyToon.Editor
             }
             finally
             {
-                if (callbackOwned) ResumeValidation();
+                RestoreCallbacks(wrapped);
+                // MaterialEditor.OnInspectorGUI calls ValidateMaterial after OnGUI returns.
+                // Skip that pass only when a callback kept every write. A false return wrote the asset.
+                s_SkipAssetValidation = s_HadConsumed && !s_DirectAssetWrite;
             }
+        }
+
+        private struct SavedCallback
+        {
+            public MaterialProperty Property;
+            public MaterialProperty.ApplyPropertyCallback Original;
+        }
+
+        private static bool s_HadConsumed;
+
+        private static void WrapCallback(MaterialProperty property, List<SavedCallback> wrapped)
+        {
+            if (property == null || property.applyPropertyCallback == null) return;
+            MaterialProperty.ApplyPropertyCallback original = property.applyPropertyCallback;
+            wrapped.Add(new SavedCallback { Property = property, Original = original });
+            property.applyPropertyCallback = (changed, mask, previous) =>
+            {
+                bool handled = original(changed, mask, previous);
+                NoteCallbackResult(handled);
+                if (handled) s_HadConsumed = true;
+                return handled;
+            };
+        }
+
+        private static void RestoreCallbacks(List<SavedCallback> wrapped)
+        {
+            for (int i = 0; i < wrapped.Count; i++)
+                if (wrapped[i].Property != null) wrapped[i].Property.applyPropertyCallback = wrapped[i].Original;
         }
 
         // Section order follows lilToon 2.4.1's full inspector, with FairyToon-only sections beside the
@@ -147,7 +194,7 @@ namespace NW.FairyToon.Editor
                 SeeThrough();
             Stencil();
             Rendering();
-            if (EditorGUI.EndChangeCheck() && s_SuppressValidation == 0 && !AnimationMode.InAnimationMode())
+            if (EditorGUI.EndChangeCheck() && !(s_HadConsumed && !s_DirectAssetWrite))
             foreach (Object target in m_Editor.targets) FairyToonMaterialSetup.Apply(target as Material);
         }
 
@@ -325,9 +372,9 @@ namespace NW.FairyToon.Editor
             bool first = gem
                 ? SearchAllows("_MainTex", "_Color")
                 : SearchAllows("_MainTex", "_Color", "_MainTexHSVG", "_MainColorAdjustMask");
-            bool alpha = SearchAllows("_AlphaMaskMode", "_AlphaMask", "_AlphaMaskScale", "_AlphaMaskValue", "|sAlphaMaskWarnOpaque", "|ft.AlphaMaskInvert", "|ft.AlphaMaskTransparency", "|ft.AlphaMaskAdvanced");
-            bool second = PrefixMatches("_Main2nd") || PrefixMatches("_FT_Main2nd") || SearchAllows("_Color2nd", "_UseMain2ndTex");
-            bool third = PrefixMatches("_Main3rd") || PrefixMatches("_FT_Main3rd") || SearchAllows("_Color3rd", "_UseMain3rdTex");
+            bool alpha = SearchAllows("_AlphaMaskMode", "_AlphaMask", "_AlphaMaskScale", "_AlphaMaskValue", "_Cutoff", "|sAlphaMaskWarnOpaque", "|ft.AlphaMaskInvert", "|ft.AlphaMaskTransparency", "|ft.AlphaMaskAdvanced");
+            bool second = PrefixMatches("_Main2nd") || PrefixMatches("_FT_Main2nd") || SearchAllows("_Color2nd", "_UseMain2ndTex", "|UV Line Angle (radians)");
+            bool third = PrefixMatches("_Main3rd") || PrefixMatches("_FT_Main3rd") || SearchAllows("_Color3rd", "_UseMain3rdTex", "|UV Line Angle (radians)");
             if (Searching && !first && !alpha && !second && !third) return;
             if (!BeginSection("Main", "sMainColorSetting", null, true, PropertyBlock.MainColor)) return;
             if (first) MainColorFirst();
@@ -350,8 +397,12 @@ namespace NW.FairyToon.Editor
                 if (adjust != EditorPrefs.GetBool(adjustKey, false)) EditorPrefs.SetBool(adjustKey, adjust);
                 if (adjust || Searching)
                 {
-                    P("_MainTexHSVG", "Hue / Saturation / Value / Gamma");
+                    // lilToon draws the mask, then HSV / Gamma with its own reset. Default is (0, 1, 1, 1).
                     Tex("_MainColorAdjustMask", null, "Color Adjustment Mask");
+                    P("_MainTexHSVG", "Hue / Saturation / Value / Gamma");
+                    var hsvg = Prop("_MainTexHSVG");
+                    if (hsvg != null && GUILayout.Button(FairyToonL10n.Text("sReset")))
+                        hsvg.vectorValue = new Vector4(0f, 1f, 1f, 1f);
                 }
             }
             EndGearRow();
@@ -593,37 +644,21 @@ namespace NW.FairyToon.Editor
         }
         private static bool DissolveComponentMixed(MaterialProperty property, int component)
         {
-            // A callback value lives on the descriptor. Reading the material asset here would mix the two.
-            if (property.applyPropertyCallback != null) return property.hasMixedValue;
-            float first = property.vectorValue[component];
-            foreach (Object target in property.targets)
-            if (target is Material material && material.GetVector(property.name)[component] != first) return true;
-            return false;
+            // The descriptor is the value on screen, including a property-block snapshot Unity already read in.
+            // material.GetVector would mix that with the asset. Per-component mixed is not exposed, so any
+            // mixed vector marks each component mixed. `component` stays in the signature for the callers.
+            if (component < 0 || component > 3) return false;
+            return property.hasMixedValue;
         }
 
-        // Editing one component must not replace the others. A property callback (animation or a renderer
-        // property block) receives the descriptor write instead of a direct material SetVector.
+        // MaterialProperty only accepts the whole vector. Start from the descriptor's current value and
+        // change the edited component, so the other components are the ones the inspector is showing.
         private void SetDissolveComponents(MaterialProperty property, Vector4 value, int components)
         {
-            if (property.applyPropertyCallback != null)
-            {
-                Vector4 current = property.vectorValue;
-                for (int component = 0; component < 4; component++)
-                    if ((components & (1 << component)) != 0) current[component] = value[component];
-                property.vectorValue = current;
-                return;
-            }
-            m_Editor.RegisterPropertyChangeUndo(property.displayName);
-            foreach (Object target in property.targets)
-            {
-                if (!(target is Material material)) continue;
-                Vector4 current = material.GetVector(property.name);
-                for (int component = 0; component < 4; component++)
-                    if ((components & (1 << component)) != 0) current[component] = value[component];
-                material.SetVector(property.name, current);
-                EditorUtility.SetDirty(material);
-            }
-            m_Editor.PropertiesChanged();
+            Vector4 current = property.vectorValue;
+            for (int component = 0; component < 4; component++)
+                if ((components & (1 << component)) != 0) current[component] = value[component];
+            property.vectorValue = current;
         }
 
         private void Shadow()
@@ -741,7 +776,7 @@ namespace NW.FairyToon.Editor
         private void Endfield()
         {
 
-            if (!SearchAllows("_EFPart", "_EFEyeLight", "_SkinLUT", "_EFSSSColor", "_EFSSSStrength", "_ShadowStrengthMask", "_EFFaceSDFScale", "_RimColorTex", "_EFEyeMask", "_EFFaceHighlight", "_EFFaceHighlightColor", "_EFFaceHighlightShift", "_PBRMap", "_EFMetallic", "_EFSmoothness", "_EFReflectivity", "_EFOcclusion", "_DiffuseRamp", "_ShadowBorder", "_ShadowBlur", "_EFShadowDarkness", "_EFShadowDarker", "_EFShadowSaturation", "_EFBacklight", "_CharShadowReceive", "_ShadowReceive", "_BackfaceForceShadow", "_SSAOStrength", "_SSAOLitStrength", "_SSAOMask", "_HairMask", "_SpecRamp", "_EFHairCentre", "_EFHairBandOffset", "_EFHairLightFollow", "_EFHairFlatten", "_EFHairShift", "_EFHairExponent", "_EFHairSpecular", "_EFHairTopCut", "_EFHairShift2", "_EFHairExponent2", "_EFHairSpecular2", "_EFHairColor2", "_EFHairJitter", "_EFHairHalo", "_EFHairStrandBreakup", "_EFHairStrandBlur", "_EFHairStrandLines", "_EFHairStrandFreq", "_EFHairRootAO", "_EFHairRootLift", "_EFHairRootInner", "_EFHairRootOuter", "_EFHairRootColor", "_EFSpecular", "_EFSpecRampFresnel", "_EFEnvironment", "_GSAAStrength", "_ReflectionCubeTex", "_ReflectionCubeOverride", "_EFRimColor", "_EFRimStrength", "_EFRimWidth", "_EFRimAlbedo", "_EFLightRim", "_EFRimDepth", "_EFRimDepthWidth", "_EFRimDepthGap", "_EFEyeOverlay", "_EFEyeShadowColor", "_EFEyeScatterColor", "_EFIris", "_EFIrisDepth", "_EFPupilLayer", "_EFPupilDepth", "_EFIrisRefraction", "_EFIrisScale", "_EFIrisRim", "_EFIrisEdgeFade", "_EFIrisVertical", "_EFIrisMaxShift", "_EFIrisEdge", "_EFIrisEdgeSoftness", "_EFIrisGaze", "_EFCorneaBulge", "_EFCorneaNormalRange", "_EFCorneaIOR", "_EFIrisSparkleTex", "_EFIrisSparkle", "_EFIrisGlowStrength", "_EFIrisSparkleScale", "_EFIrisGlowColor", "_EFIrisFrame", "_EFIrisWorldRadius", "_EFIrisDish", "_EFIrisCenterL", "_EFIrisCenterR", "_EFIrisRadius", "_EFPupil", "_EFPupilCenterL", "_EFPupilCenterR", "_EFPupilRadius", "_EFPupilYRatio", "_EFPupilScale", "_EFPupilOffset", "_SkinLUT|Shadow LUT (no LUT: Shadow Tone)", "_SkinLUT|Shadow LUT (no LUT: Shadow Tone)", "_ShadowStrengthMask|Face SDF (lilToon format)", "_RimColorTex|Rim Mask (R)", "_EFEyeMask|Eye Mask (R: shades as Eye)", "_EFFaceHighlight|Highlight (R: nose tip, lips)", "_EFFaceHighlightShift|Highlight View Shift", "_PBRMap|PBR Map (R metal, G refl., B AO, A smooth)", "_EFReflectivity|Reflectivity (F0 = 0.04 x value)", "_EFOcclusion|Occlusion (map B)", "_DiffuseRamp|Ramp (RGB hue, A lit weight)", "_ShadowBorder|Border (no ramp)", "_ShadowBlur|Blur (no ramp)", "_CharShadowReceive|Character Shadow", "_ShadowReceive|Receive Scene Shadow", "_SSAOStrength|Ambient Strength", "_SSAOLitStrength|Lit Strength", "_SSAOMask|Mask (white = SSAO on)", "_HairMask|Hair Mask (R highlight, G strand noise, B AO)", "_SpecRamp|Band Colour Ramp (U band strength, V side)", "_SkinLUT|Shadow LUT (optional: warm hair, as skin)", "_EFHairShift|Shift", "_EFHairExponent|Sharpness", "_EFHairSpecular|Strength", "_EFHairTopCut|Top Cut", "_EFHairShift2|Shift", "_EFHairExponent2|Sharpness", "_EFHairSpecular2|Strength", "_EFHairColor2|Colour (A: 0 hair colour, 1 this colour)", "_EFHairStrandBlur|Blur (mip levels)", "_EFHairStrandFreq|Density (per UV unit)", "_EFHairRootLift|Lift (m)", "_EFHairRootInner|Inner (m)", "_EFHairRootOuter|Outer (m)", "_EFHairRootColor|Colour", "_SpecRamp|Specular Ramp", "_GSAAStrength|GSAA (at least 0.5)", "_ReflectionCubeTex|Cubemap Fallback (x ambient)")) return;
+            if (!IrisMatches() && !SearchAllows("_EFPart", "_EFEyeLight", "_SkinLUT", "_EFSSSColor", "_EFSSSStrength", "_ShadowStrengthMask", "_EFFaceSDFScale", "_RimColorTex", "_EFEyeMask", "_EFFaceHighlight", "_EFFaceHighlightColor", "_EFFaceHighlightShift", "_PBRMap", "_EFMetallic", "_EFSmoothness", "_EFReflectivity", "_EFOcclusion", "_DiffuseRamp", "_ShadowBorder", "_ShadowBlur", "_EFShadowDarkness", "_EFShadowDarker", "_EFShadowSaturation", "_EFBacklight", "_CharShadowReceive", "_ShadowReceive", "_BackfaceForceShadow", "_SSAOStrength", "_SSAOLitStrength", "_SSAOMask", "_HairMask", "_SpecRamp", "_EFHairCentre", "_EFHairBandOffset", "_EFHairLightFollow", "_EFHairFlatten", "_EFHairShift", "_EFHairExponent", "_EFHairSpecular", "_EFHairTopCut", "_EFHairShift2", "_EFHairExponent2", "_EFHairSpecular2", "_EFHairColor2", "_EFHairJitter", "_EFHairHalo", "_EFHairStrandBreakup", "_EFHairStrandBlur", "_EFHairStrandLines", "_EFHairStrandFreq", "_EFHairRootAO", "_EFHairRootLift", "_EFHairRootInner", "_EFHairRootOuter", "_EFHairRootColor", "_EFSpecular", "_EFSpecRampFresnel", "_EFEnvironment", "_GSAAStrength", "_ReflectionCubeTex", "_ReflectionCubeOverride", "_EFRimColor", "_EFRimStrength", "_EFRimWidth", "_EFRimAlbedo", "_EFLightRim", "_EFRimDepth", "_EFRimDepthWidth", "_EFRimDepthGap", "_EFEyeOverlay", "_EFEyeShadowColor", "_EFEyeScatterColor", "_EFIris", "_EFIrisDepth", "_EFPupilLayer", "_EFPupilDepth", "_EFIrisRefraction", "_EFIrisScale", "_EFIrisRim", "_EFIrisEdgeFade", "_EFIrisVertical", "_EFIrisMaxShift", "_EFIrisEdge", "_EFIrisEdgeSoftness", "_EFIrisGaze", "_EFCorneaBulge", "_EFCorneaNormalRange", "_EFCorneaIOR", "_EFIrisSparkleTex", "_EFIrisSparkle", "_EFIrisGlowStrength", "_EFIrisSparkleScale", "_EFIrisGlowColor", "_EFIrisFrame", "_EFIrisWorldRadius", "_EFIrisDish", "_EFIrisCenterL", "_EFIrisCenterR", "_EFIrisRadius", "_EFPupil", "_EFPupilCenterL", "_EFPupilCenterR", "_EFPupilRadius", "_EFPupilYRatio", "_EFPupilScale", "_EFPupilOffset", "_SkinLUT|Shadow LUT (no LUT: Shadow Tone)", "_SkinLUT|Shadow LUT (no LUT: Shadow Tone)", "_ShadowStrengthMask|Face SDF (lilToon format)", "_RimColorTex|Rim Mask (R)", "_EFEyeMask|Eye Mask (R: shades as Eye)", "_EFFaceHighlight|Highlight (R: nose tip, lips)", "_EFFaceHighlightShift|Highlight View Shift", "_PBRMap|PBR Map (R metal, G refl., B AO, A smooth)", "_EFReflectivity|Reflectivity (F0 = 0.04 x value)", "_EFOcclusion|Occlusion (map B)", "_DiffuseRamp|Ramp (RGB hue, A lit weight)", "_ShadowBorder|Border (no ramp)", "_ShadowBlur|Blur (no ramp)", "_CharShadowReceive|Character Shadow", "_ShadowReceive|Receive Scene Shadow", "_SSAOStrength|Ambient Strength", "_SSAOLitStrength|Lit Strength", "_SSAOMask|Mask (white = SSAO on)", "_HairMask|Hair Mask (R highlight, G strand noise, B AO)", "_SpecRamp|Band Colour Ramp (U band strength, V side)", "_SkinLUT|Shadow LUT (optional: warm hair, as skin)", "_EFHairShift|Shift", "_EFHairExponent|Sharpness", "_EFHairSpecular|Strength", "_EFHairTopCut|Top Cut", "_EFHairShift2|Shift", "_EFHairExponent2|Sharpness", "_EFHairSpecular2|Strength", "_EFHairColor2|Colour (A: 0 hair colour, 1 this colour)", "_EFHairStrandBlur|Blur (mip levels)", "_EFHairStrandFreq|Density (per UV unit)", "_EFHairRootLift|Lift (m)", "_EFHairRootInner|Inner (m)", "_EFHairRootOuter|Outer (m)", "_EFHairRootColor|Colour", "_SpecRamp|Specular Ramp", "_GSAAStrength|GSAA (at least 0.5)", "_ReflectionCubeTex|Cubemap Fallback (x ambient)")) return;
             bool mixedPart = Prop("_EFPart") != null && Prop("_EFPart").hasMixedValue;
             int part = Mathf.RoundToInt(Float("_EFPart"));
             bool eye = mixedPart || part == FairyToonMaterialSetup.PartEye;
@@ -1448,9 +1483,11 @@ namespace NW.FairyToon.Editor
             bool fur = SelectedRenderingMode(FairyToonMaterialSetup.Fur) && SearchAllows("_FurCull", "_FurZClip", "_FurZTest", "_FurColorMask", "_FurOffsetFactor", "_FurOffsetUnits", "_FurBlendOp", "_FurBlendOpAlpha", "_FurSrcBlend", "_FurDstBlend", "_FurSrcBlendAlpha", "_FurDstBlendAlpha", "_FurZWrite", "_FurAlphaToMask");
             if (!queue && !fur) return;
             if (!BeginSection("Rendering", "sRenderingSetting", null, false, PropertyBlock.Rendering)) return;
-            if (RowVisible(null, "Render Queue")) LocalizedRenderQueue();
-            if (RowVisible(null, "Enable GPU Instancing")) LocalizedMaterialToggle("Enable GPU Instancing", material => material.enableInstancing, (material, value) => material.enableInstancing = value);
-            if (RowVisible(null, "Double Sided Global Illumination")) LocalizedMaterialToggle("Double Sided Global Illumination", material => material.doubleSidedGI, (material, value) => material.doubleSidedGI = value);
+            // Native controls keep raw versus displayed queue, From Shader, deferred commit, variant lock,
+            // and the instancing capability check. Search uses the same English labels Unity draws by default.
+            if (RowVisible(null, "Render Queue")) m_Editor.RenderQueueField();
+            if (RowVisible(null, "Enable GPU Instancing")) m_Editor.EnableInstancingField();
+            if (RowVisible(null, "Double Sided Global Illumination")) m_Editor.DoubleSidedGIField();
             if (SelectedRenderingMode(FairyToonMaterialSetup.Fur))
             {
                 SubHeader("Fur Rendering");
@@ -1489,46 +1526,6 @@ namespace NW.FairyToon.Editor
         }
 
         // ---- Layout helpers ----
-
-        private void LocalizedRenderQueue()
-        {
-            Material first = m_Editor.target as Material;
-            if (first == null) return;
-            int queue = first.renderQueue;
-            bool mixed = false;
-            foreach (Object target in m_Editor.targets)
-                if (target is Material material && material.renderQueue != queue) mixed = true;
-            EditorGUI.showMixedValue = mixed;
-            EditorGUI.BeginChangeCheck();
-            int next = EditorGUILayout.IntField(FairyToonL10n.Text("Render Queue"), mixed ? 0 : queue);
-            if (EditorGUI.EndChangeCheck())
-            {
-                Undo.RecordObjects(m_Editor.targets, "FairyToon Render Queue");
-                foreach (Object target in m_Editor.targets)
-                    if (target is Material material) material.renderQueue = next;
-            }
-            EditorGUI.showMixedValue = false;
-        }
-
-        private void LocalizedMaterialToggle(string label, System.Func<Material, bool> read, System.Action<Material, bool> write)
-        {
-            Material first = m_Editor.target as Material;
-            if (first == null) return;
-            bool value = read(first);
-            bool mixed = false;
-            foreach (Object target in m_Editor.targets)
-                if (target is Material material && read(material) != value) mixed = true;
-            EditorGUI.showMixedValue = mixed;
-            EditorGUI.BeginChangeCheck();
-            bool next = EditorGUILayout.Toggle(FairyToonL10n.Text(label), value);
-            if (EditorGUI.EndChangeCheck())
-            {
-                Undo.RecordObjects(m_Editor.targets, "FairyToon " + label);
-                foreach (Object target in m_Editor.targets)
-                    if (target is Material material) write(material, next);
-            }
-            EditorGUI.showMixedValue = false;
-        }
 
         private void RenderingMode()
         {
@@ -1776,7 +1773,6 @@ namespace NW.FairyToon.Editor
 
             if (!IrisMatches()) return;
 
-            if (false && !SearchAllows("_EFIris", "_EFIrisDepth", "_EFPupilLayer", "_EFPupilDepth", "_EFIrisRefraction", "_EFIrisScale", "_EFIrisRim", "_EFIrisEdgeFade", "_EFIrisVertical", "_EFIrisMaxShift", "_EFIrisEdge", "_EFIrisEdgeSoftness", "_EFIrisGaze", "_EFCorneaBulge", "_EFCorneaNormalRange", "_EFCorneaIOR", "_EFIrisSparkleTex", "_EFIrisSparkle", "_EFIrisGlowStrength", "_EFIrisSparkleScale", "_EFIrisGlowColor", "_EFIrisFrame", "_EFIrisWorldRadius", "_EFIrisDish", "_EFIrisCenterL", "_EFIrisCenterR", "_EFIrisRadius", "_EFPupil", "_EFPupilCenterL", "_EFPupilCenterR", "_EFPupilRadius", "_EFPupilYRatio", "_EFPupilScale", "_EFPupilOffset", "_EFIris|3D Iris|Sink the iris behind a curved cornea and add its reflection and glow.", "_EFIrisDepth|Depth|How far the iris sinks; more makes it slide further when the head or camera turns.", "_EFPupilLayer|Pupil Layer|On: the pupil mesh moves as its own layer, so pupil shape keys (size, star, heart, off) work. Off: one default pupil is painted into the iris (older fold).", "_EFPupilDepth|Pupil Depth|How deep the pupil sits: 0 stays on the eye surface, 1 moves with the iris pattern. Middle values give a layered look and keep the pupil inside the iris at head turns.", "_EFIrisRefraction|Refraction|How much the cornea bends the view; also magnifies the iris centre face-on.", "_EFIrisScale|Art Scale|Zoom of the iris art inside the eye; lower values enlarge the pupil and show less of the iris rim.", "_EFIrisRim|Fixed Rim|Radius (iris units) from which the painted rim stays on the eye surface; set just inside the dark ring. 1.5 = off (the whole iris sinks).", "_EFIrisEdgeFade|Edge Fade|Fades the parallax to zero toward Fixed Rim (or the iris edge) so the rim never tears and the pattern never runs off the art. The band widens by itself at steep angles so the pattern never folds. 0 = off (hard switch at Fixed Rim).", "_EFIrisVertical|Vertical Strength|Scales up/down parallax; tall anime eyes often look better with less vertical shift.", "_EFIrisMaxShift|Max Shift|Soft limit on how far the pattern can shift, in iris radii, for steep viewing angles. 2 = off.", "_EFIrisEdge|Pattern Edge|Maximum lookup radius inside the painted pattern; keep it inside the painted dark ring and clear of painted highlight dots.", "_EFIrisEdgeSoftness|Edge Softness|How the pattern behaves near Pattern Edge: 0 repeats the edge colour (fibre streaks), higher squeezes the outer pattern toward the edge instead (no streaks); the inner part is untouched below (1 - softness) x Pattern Edge.", "_EFIrisGaze|Gaze Frame|1 uses head forward, centring the iris when the face looks at the camera; 0 uses the mesh surface.", "_EFCorneaBulge|Cornea Bulge|Height of the clear dome over the iris; more curves the view and reflection further.", "_EFCorneaNormalRange|Normal Range|Softens the dome's curve into the flat rim; higher values make a wider, flatter transition.", "_EFCorneaIOR|IOR|How strongly the cornea bends the matcap reflection; higher bends it more.", "_EFIrisSparkleTex|Texture (RGB light, A glow)|Reflection picture over the iris; RGB supplies light and alpha supplies the coloured glow.", "_EFIrisSparkle|Reflection Strength|Brightness of the matcap reflection; 0 removes the window panes without changing glow.", "_EFIrisGlowStrength|Glow Strength|Strength of the coloured glow; 0 removes glow without changing the reflection.", "_EFIrisSparkleScale|Matcap Scale|Size of the reflection pattern; larger values make the window panes smaller.", "_EFIrisGlowColor|Glow Colour|Colour and brightness of the glow screened over the iris.", "_EFIrisFrame|Frame (linear data, baked from UV islands)|Baked eye-island data that keeps iris motion aligned to this avatar's mesh.", "_EFIrisWorldRadius|Iris World Radius|World size of one iris radius in metres, measured from the mesh. Re-measure after rescaling.", "_EFIrisDish|Iris Dish|How much the iris mesh surface rises from centre to rim, in iris radii; keeps the moved pupil on it.", "_EFIrisCenterL|Iris Centre L|Centre of the left iris in the texture; shifts where its art is sampled.", "_EFIrisCenterR|Iris Centre R|Centre of the right iris in the texture; shifts where its art is sampled.", "_EFIrisRadius|Iris Radius|Size of each iris island in the texture; sets the reach of the art lookup.", "_EFPupil|Pupil Fold|How much of the separate pupil is folded into the iris picture.", "_EFPupilCenterL|Pupil Centre L|Centre of the left pupil island in the texture; aligns its folded picture.", "_EFPupilCenterR|Pupil Centre R|Centre of the right pupil island in the texture; aligns its folded picture.", "_EFPupilRadius|Pupil X Radius|Width of the pupil island in the texture; sets how much pupil art is sampled.", "_EFPupilYRatio|Pupil Y / X|Pupil height / width; shapes the fold and reserves vertical extent for the layer travel limit.", "_EFPupilScale|Pupil Scale in Iris Units|Pupil size in iris units; sizes the fold and reserves extent for the layer travel limit.", "_EFPupilOffset|Pupil Offset (left iris units)|Rest pupil centre in left iris units, used by both fold and layer; the right eye mirrors the horizontal offset.")) return;
             if (showToggle) P("_EFIris", "3D Iris", "Sink the iris behind a curved cornea and add its reflection and glow.");
             var iris = Prop("_EFIris");
             if (iris == null || (!iris.hasMixedValue && Number(iris) <= 0.5f)) return;
@@ -1955,8 +1951,14 @@ namespace NW.FairyToon.Editor
         {
             var tex = Prop(texture);
             if (tex == null || (tex.propertyFlags & UnityEngine.Rendering.ShaderPropertyFlags.NoScaleOffset) != 0) return;
-            if (!RowVisible(texture, null)) return;
-            using (new EditorGUI.IndentLevelScope()) m_Editor.TextureScaleOffsetProperty(tex);
+            if (!RowVisible(texture, null) && !RowVisible(null, "ft.Tiling") && !RowVisible(null, "ft.Offset")) return;
+            EditorGUI.showMixedValue = tex.hasMixedValue;
+            Vector4 st = tex.textureScaleAndOffset;
+            EditorGUI.BeginChangeCheck();
+            Vector2 scale = EditorGUILayout.Vector2Field(FairyToonL10n.Text("ft.Tiling"), new Vector2(st.x, st.y));
+            Vector2 offset = EditorGUILayout.Vector2Field(FairyToonL10n.Text("ft.Offset"), new Vector2(st.z, st.w));
+            if (EditorGUI.EndChangeCheck()) tex.textureScaleAndOffset = new Vector4(scale.x, scale.y, offset.x, offset.y);
+            EditorGUI.showMixedValue = false;
         }
 
         private static void InitStyles()

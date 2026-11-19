@@ -42,12 +42,12 @@ for (const [change, callback, animating, result] of expected)
   if (outcome(change, callback, animating) !== result) errors.push('paste decision table drifted');
 if (pasteFn.indexOf('PasteWouldChange') < 0 || pasteFn.indexOf('PasteWouldChange') > pasteFn.indexOf('BeginUndo'))
   errors.push('Paste must return before recording undo when nothing changes');
-if (pasteFn.indexOf('if (!direct) return') < 0 || pasteFn.indexOf('if (!direct) return') > pasteFn.indexOf('ApplyMaterials'))
-  errors.push('callback and animation writes must return before Apply');
+if (pasteFn.indexOf('callback && !FairyToonGUI.WroteAsset') < 0 || pasteFn.indexOf('WroteAsset') > pasteFn.indexOf('ApplyMaterials'))
+  errors.push('a callback that kept the write must return before Apply');
+if (pasteFn.includes('AnimationMode.InAnimationMode()'))
+  errors.push('animation mode with no callback still writes the asset and must validate');
 if (!pasteFn.includes('applyPropertyCallback') && !clipCs.includes('applyPropertyCallback'))
   errors.push('Paste must detect a MaterialProperty apply callback');
-if (!clipCs.includes('AnimationMode.InAnimationMode()'))
-  errors.push('animation recording must skip the asset Apply');
 if (!clipCs.includes('hasMixedValue') || !clipCs.includes('dest.floatValue != source.floatValue'))
   errors.push('same-value paste must compare the stored value and still run when the selection is mixed');
 const writes = [
@@ -62,8 +62,16 @@ for (const line of writes)
   if (!clipCs.includes(line)) errors.push('clipboard no longer writes ' + line);
 if (!clipCs.includes('Undo.IncrementCurrentGroup()'))
   errors.push('paste undo must start its own group');
-if (pasteFn.includes('if (!direct || !entry.IsTexture'))
-  errors.push('texture scale must still be written when a callback owns the property');
+if (!pasteFn.includes('Undo.RecordObject(material, undo)'))
+  errors.push('callback-context _ST paste must record its own undo');
+if (!pasteFn.includes('ApplyValue(dest, source)'))
+  errors.push('Paste must call ApplyValue');
+if (!resetFn.includes('ApplyDefault(prop, shader, index)'))
+  errors.push('Reset must call ApplyDefault');
+if (!clipCs.includes('Undo.RecordObjects(editor.targets, undo)'))
+  errors.push('direct paste must record the selected materials');
+if (/if \(dest == null\) continue;/.test(clipCs.slice(clipCs.indexOf('bool PasteWouldChange'), clipCs.indexOf('bool ResetWouldChange'))))
+  errors.push('an _ST difference must still count when the destination property is missing');
 if (resetFn.indexOf('ResetWouldChange') < 0 || resetFn.indexOf('ResetWouldChange') > resetFn.indexOf('BeginUndo'))
   errors.push('Reset must return before recording undo when every value is already the default');
 
