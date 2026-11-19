@@ -663,23 +663,37 @@ namespace NW.FairyToon.Editor
                     {
                         Rect row = EditorGUILayout.GetControlRect();
                         BeginScope(row, scale);
-                        EditorGUI.showMixedValue = scale.hasMixedValue || offset.hasMixedValue;
-                        EditorGUI.BeginChangeCheck();
-                        invert = EditorGUI.Toggle(row, invertLabel, invert);
-                        invertChanged = EditorGUI.EndChangeCheck();
-                        EditorGUI.showMixedValue = false;
-                        EndScope();
+                        BeginScope(row, offset);
+                        try
+                        {
+                            EditorGUI.showMixedValue = scale.hasMixedValue || offset.hasMixedValue;
+                            EditorGUI.BeginChangeCheck();
+                            invert = EditorGUI.Toggle(row, invertLabel, invert);
+                            invertChanged = EditorGUI.EndChangeCheck();
+                        }
+                        finally
+                        {
+                            EditorGUI.showMixedValue = false;
+                            EndScope();
+                            EndScope();
+                        }
                     }
                     if (!Searching || Hit(transparencyLabel))
                     {
                         Rect row = EditorGUILayout.GetControlRect();
                         BeginScope(row, offset);
-                        EditorGUI.showMixedValue = scale.hasMixedValue || offset.hasMixedValue;
-                        EditorGUI.BeginChangeCheck();
-                        transparency = EditorGUI.Slider(row, transparencyLabel, transparency, -1f, 1f);
-                        transparencyChanged = EditorGUI.EndChangeCheck();
-                        EditorGUI.showMixedValue = false;
-                        EndScope();
+                        try
+                        {
+                            EditorGUI.showMixedValue = scale.hasMixedValue || offset.hasMixedValue;
+                            EditorGUI.BeginChangeCheck();
+                            transparency = EditorGUI.Slider(row, transparencyLabel, transparency, -1f, 1f);
+                            transparencyChanged = EditorGUI.EndChangeCheck();
+                        }
+                        finally
+                        {
+                            EditorGUI.showMixedValue = false;
+                            EndScope();
+                        }
                     }
                     if (invertChanged || transparencyChanged)
                         WriteAlphaMask(scale, offset, invertChanged, transparencyChanged, invert, transparency);
@@ -2402,21 +2416,57 @@ namespace NW.FairyToon.Editor
 
         private static void WriteAlphaMask(MaterialProperty scale, MaterialProperty offset, bool invertChanged, bool transparencyChanged, bool invert, float transparency)
         {
+            bool descriptorInvert = scale.floatValue < 0f;
+            float descriptorTransparency = offset.floatValue - (descriptorInvert ? 1f : 0f);
+            if (invertChanged) descriptorInvert = invert;
+            if (transparencyChanged) descriptorTransparency = transparency;
+            float callbackScale = descriptorInvert ? -1f : 1f;
+            float callbackOffset = descriptorTransparency + (descriptorInvert ? 1f : 0f);
+            bool scaleHandled = !invertChanged || OfferFloat(scale, callbackScale);
+            bool offsetHandled = !(invertChanged || transparencyChanged) || OfferFloat(offset, callbackOffset);
+            if (scaleHandled && offsetHandled) return;
             if (scale.targets == null) return;
-            Undo.RecordObjects(scale.targets, "Modify Alpha Mask");
-            foreach (Object target in scale.targets)
+            Undo.IncrementCurrentGroup();
+            int group = Undo.GetCurrentGroup();
+            try
             {
-                var material = target as Material;
-                if (material == null || !material.HasProperty(scale.name) || !material.HasProperty(offset.name)) continue;
-                float storedScale = material.GetFloat(scale.name);
-                float storedOffset = material.GetFloat(offset.name);
-                bool storedInvert = storedScale < 0f;
-                float storedTransparency = storedOffset - (storedInvert ? 1f : 0f);
-                if (invertChanged) storedInvert = invert;
-                if (transparencyChanged) storedTransparency = transparency;
-                material.SetFloat(scale.name, storedInvert ? -1f : 1f);
-                material.SetFloat(offset.name, storedTransparency + (storedInvert ? 1f : 0f));
+                foreach (Object target in scale.targets)
+                {
+                    var material = target as Material;
+                    if (material == null || !material.HasProperty(scale.name) || !material.HasProperty(offset.name)) continue;
+                    float storedScale = material.GetFloat(scale.name);
+                    float storedOffset = material.GetFloat(offset.name);
+                    bool storedInvert = storedScale < 0f;
+                    float storedTransparency = storedOffset - (storedInvert ? 1f : 0f);
+                    if (invertChanged) storedInvert = invert;
+                    if (transparencyChanged) storedTransparency = transparency;
+                    float nextScale = storedInvert ? -1f : 1f;
+                    float nextOffset = storedTransparency + (storedInvert ? 1f : 0f);
+                    bool writeScale = !scaleHandled && !Mathf.Approximately(nextScale, storedScale) && !Locked(material, scale.name);
+                    bool writeOffset = !offsetHandled && !Mathf.Approximately(nextOffset, storedOffset) && !Locked(material, offset.name);
+                    if (!writeScale && !writeOffset) continue;
+                    Undo.RecordObject(material, "Modify Alpha Mask");
+                    if (writeScale) material.SetFloat(scale.name, nextScale);
+                    if (writeOffset) material.SetFloat(offset.name, nextOffset);
+                    FairyToonMaterialSetup.Apply(material);
+                }
             }
+            finally { Undo.CollapseUndoOperations(group); }
+        }
+
+        private static bool OfferFloat(MaterialProperty prop, float value)
+        {
+            if (prop.applyPropertyCallback == null) return false;
+            bool handled = false;
+            MaterialProperty.ApplyPropertyCallback original = prop.applyPropertyCallback;
+            prop.applyPropertyCallback = (changed, mask, previous) =>
+            {
+                handled = original(changed, mask, previous);
+                return true;
+            };
+            try { prop.floatValue = value; }
+            finally { prop.applyPropertyCallback = original; }
+            return handled;
         }
 
         private void ColorAlpha(string name)
