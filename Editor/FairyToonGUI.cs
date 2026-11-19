@@ -313,7 +313,9 @@ namespace NW.FairyToon.Editor
             string key = PrefsPrefix + "Foldout.Version";
             bool open = EditorPrefs.GetBool(key, false);
             var versionStyle = new GUIStyle(EditorStyles.label) { fontStyle = FontStyle.Bold };
-            open = EditorGUILayout.Foldout(open, "FairyToon 0.2.1", true, versionStyle);
+            Rect position = EditorGUILayout.GetControlRect();
+            EditorGUI.LabelField(position, "FairyToon 0.2.1", versionStyle);
+            open = EditorGUI.Foldout(position, open, GUIContent.none, true);
             if (open != EditorPrefs.GetBool(key, false)) EditorPrefs.SetBool(key, open);
             if (!open) return;
             EditorGUI.indentLevel++;
@@ -2212,6 +2214,17 @@ namespace NW.FairyToon.Editor
             if (!RowVisible(name, shown, tooltip)) return;
             string tip = string.IsNullOrEmpty(tooltip) ? null : FairyToonL10n.Text(tooltip);
             if (DrawLocalizedEnum(prop, shown, tip)) return;
+            if (prop.propertyType == ShaderPropertyType.Color && (IsGammaHdr(name) || IsBuiltinHdr(name)))
+            {
+                Rect row = EditorGUILayout.GetControlRect();
+                BeginScope(row, prop);
+                EditorGUI.showMixedValue = prop.hasMixedValue;
+                Color color = prop.colorValue;
+                if (FairyToonHDRDrawer.Draw(row, shown, ref color)) prop.colorValue = color;
+                EditorGUI.showMixedValue = false;
+                EndScope();
+                return;
+            }
             m_Editor.ShaderProperty(prop, new GUIContent(shown, tip));
         }
 
@@ -2320,28 +2333,28 @@ namespace NW.FairyToon.Editor
             // These lilToon colours are gamma-authored even above 1; HDR editing must not add the native HDR flag.
             // TexturePropertySingleLine ignores custom drawers, so any [FairyToonHDR] colour takes the HDR picker here.
             var content = new GUIContent(shown);
-            bool hdr = other != null && IsGammaHdr(extra);
-            m_Editor.TexturePropertySingleLine(content, tex, hdr ? null : other);
-            if (hdr) HdrSwatch(other);
-        }
-
-        private void HdrSwatch(MaterialProperty prop)
-        {
-            Rect row = EditorGUILayout.GetControlRect();
-            BeginScope(row, prop);
-            EditorGUI.showMixedValue = prop.hasMixedValue;
-            Color value = prop.colorValue;
-            if (FairyToonHDRDrawer.Draw(row, FairyToonL10n.Property(prop.name, prop.displayName), ref value))
-                prop.colorValue = value;
+            bool hdr = other != null && (IsGammaHdr(extra) || IsBuiltinHdr(extra));
+            Rect row = m_Editor.TexturePropertySingleLine(content, tex, hdr ? null : other);
+            if (!hdr) return;
+            Rect slot = row;
+            slot.xMin = row.xMax - 92f;
+            BeginScope(slot, other);
+            EditorGUI.showMixedValue = other.hasMixedValue;
+            Color color = other.colorValue;
+            if (FairyToonHDRDrawer.Draw(slot, null, ref color)) other.colorValue = color;
             EditorGUI.showMixedValue = false;
             EndScope();
         }
 
-        private bool IsGammaHdr(string property)
+        private bool IsGammaHdr(string property) => HasAttribute(property, "FairyToonHDR");
+
+        private bool IsBuiltinHdr(string property) => HasAttribute(property, "HDR");
+
+        private bool HasAttribute(string property, string attribute)
         {
-            if (m_Editor.target is not Material material || material.shader == null) return false;
+            if (string.IsNullOrEmpty(property) || m_Editor.target is not Material material || material.shader == null) return false;
             int index = material.shader.FindPropertyIndex(property);
-            return index >= 0 && System.Array.IndexOf(material.shader.GetPropertyAttributes(index), "FairyToonHDR") >= 0;
+            return index >= 0 && System.Array.IndexOf(material.shader.GetPropertyAttributes(index), attribute) >= 0;
         }
 
         private void ScaleOffset(string texture)
