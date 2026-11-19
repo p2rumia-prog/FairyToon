@@ -467,7 +467,7 @@ namespace NW.FairyToon.Editor
         {
 
             if (!PrefixMatches("_Emission") && !PrefixMatches("_UseEmission") && !SearchAllows("|ft.Tiling", "|ft.Offset")) return;
-            if (!BeginSection("EmissionGroup", "sEmissionSetting", null, false, PropertyBlock.Emission)) return;
+            if (!BeginSection("EmissionGroup", "sEmissionSetting", null, false, PropertyBlock.Emission, true, false)) return;
             Emission(false);
             Emission(true);
             EndSection();
@@ -477,7 +477,7 @@ namespace NW.FairyToon.Editor
         {
 
             if (!SearchAllows("_UseBumpMap", "_BumpMap", "_BumpScale", "_UseBump2ndMap", "_Bump2ndMap", "_Bump2ndScale", "_Bump2ndMap_UVMode", "_Bump2ndScaleMask", "_UseAnisotropy", "_AnisotropyTangentMap", "_AnisotropyScale", "_AnisotropyScaleMask", "_AnisotropyTangentWidth", "_AnisotropyBitangentWidth", "_AnisotropyShift", "_AnisotropyShiftNoiseScale", "_AnisotropySpecularStrength", "_Anisotropy2ndTangentWidth", "_Anisotropy2ndBitangentWidth", "_Anisotropy2ndShift", "_Anisotropy2ndShiftNoiseScale", "_Anisotropy2ndSpecularStrength", "_AnisotropyShiftNoiseMask", "_Anisotropy2Reflection", "_Anisotropy2MatCap", "_Anisotropy2MatCap2nd", "|ft.Tiling", "|ft.Offset")) return;
-            if (!BeginSection("NormalGroup", "sNormalMapSetting", null, false, PropertyBlock.NormalMap)) return;
+            if (!BeginSection("NormalGroup", "sNormalMapSetting", null, false, PropertyBlock.NormalMap, true, false)) return;
             NormalMaps();
             Anisotropy();
             EndSection();
@@ -487,7 +487,7 @@ namespace NW.FairyToon.Editor
         {
 
             if (!PrefixMatches("_MatCap") && !SearchAllows("_UseMatCap", "_UseMatCap2nd")) return;
-            if (!BeginSection("MatCapGroup", "sMatCapSetting", null, false, PropertyBlock.MatCaps)) return;
+            if (!BeginSection("MatCapGroup", "sMatCapSetting", null, false, PropertyBlock.MatCaps, true, false)) return;
             MatCap();
             EndSection();
         }
@@ -601,11 +601,10 @@ namespace NW.FairyToon.Editor
         private void BaseSetting()
         {
             if (!SearchAllows("_ShadingModel", "_TransparentMode|sRenderingMode", "_Cull", "_ZWrite", "_Cutoff", "_FlipNormal", "_BackfaceColor", "_AAStrength", "_ShadingModel|Shading Model")) return;
-            if (!BeginSection("Base", "sBaseSetting", null, true, PropertyBlock.Base)) return;
+            if (!BeginSection("Base", "sBaseSetting", null, true, PropertyBlock.Base, true, true, false)) return;
             P("_ShadingModel", "Shading Model");
-            P("_Cull");
-            if (AnyCoverage(FairyToonMaterialSetup.Opaque) || Prop("_TransparentMode")?.hasMixedValue == true)
-                DrawZWrite();
+            if (!EverySelectedIsGem()) P("_Cull");
+            P("_ZWrite");
             if (AnyCoverage(FairyToonMaterialSetup.Cutout, FairyToonMaterialSetup.Transparent, FairyToonMaterialSetup.Fur))
                 P("_Cutoff");
             P("_FlipNormal");
@@ -1922,7 +1921,7 @@ namespace NW.FairyToon.Editor
                 "_SrcBlend", "_DstBlend", "_SrcBlendAlpha", "_DstBlendAlpha", "_ZWrite", "_ZTest", "_OffsetFactor", "_OffsetUnits", "_Cull");
             bool fur = SelectedRenderingMode(FairyToonMaterialSetup.Fur) && SearchAllows("_FurCull", "_FurZClip", "_FurZTest", "_FurColorMask", "_FurOffsetFactor", "_FurOffsetUnits", "_FurBlendOp", "_FurBlendOpAlpha", "_FurSrcBlend", "_FurDstBlend", "_FurSrcBlendAlpha", "_FurDstBlendAlpha", "_FurZWrite", "_FurAlphaToMask");
             if (!queue && !fur) return;
-            if (!BeginSection("Rendering", "sRenderingSetting", null, false, PropertyBlock.Rendering)) return;
+            if (!BeginSection("Rendering", "sRenderingSetting", null, false, PropertyBlock.Rendering, true, false)) return;
             if ((!Searching || LabelOnly("sRenderingReset")) && GUILayout.Button(FairyToonL10n.Text("sRenderingReset")))
             {
                 Undo.RecordObjects(m_Editor.targets, "FairyToon Reset Rendering");
@@ -1934,6 +1933,9 @@ namespace NW.FairyToon.Editor
                 }
                 m_Props = MaterialEditor.GetMaterialProperties(m_Editor.targets);
             }
+            if (m_Frames.Count > 0) m_Frames.RemoveAt(m_Frames.Count - 1);
+            OpenBox(FairyToonL10n.Text("sRendering"), null, PropertyBlock.Rendering);
+            m_Frames.Add(true);
             P("_Cull");
             DrawZWrite();
             P("_ZTest");
@@ -1941,11 +1943,6 @@ namespace NW.FairyToon.Editor
             P("_OffsetUnits");
             if (AnyCoverage(FairyToonMaterialSetup.Cutout))
                 P("_AlphaToMask", "Alpha To Coverage (hair)");
-            // Native controls keep raw versus displayed queue, From Shader, deferred commit, variant lock,
-            // and the instancing capability check. Search uses the same English labels Unity draws by default.
-            if (UnityRowVisible("Render Queue")) m_Editor.RenderQueueField();
-            if (UnityRowVisible("Enable GPU Instancing")) m_Editor.EnableInstancingField();
-            if (UnityRowVisible("Double Sided Global Illumination")) m_Editor.DoubleSidedGIField();
             if (SelectedRenderingMode(FairyToonMaterialSetup.Fur))
             {
                 SubHeader("Fur Rendering");
@@ -1976,6 +1973,9 @@ namespace NW.FairyToon.Editor
                 P("_SrcBlendAlpha");
                 P("_DstBlendAlpha");
             }
+            if (UnityRowVisible("Render Queue")) m_Editor.RenderQueueField();
+            if (UnityRowVisible("Enable GPU Instancing")) m_Editor.EnableInstancingField();
+            if (UnityRowVisible("Double Sided Global Illumination")) m_Editor.DoubleSidedGIField();
 
             EndSection();
         }
@@ -2103,7 +2103,7 @@ namespace NW.FairyToon.Editor
         private void EndGearRow() => CloseBox();
 
         private bool BeginSection(string key, string title, MaterialProperty toggle = null, bool openByDefault = false,
-            PropertyBlock? block = null, bool foldout = true, bool frame = true)
+            PropertyBlock? block = null, bool foldout = true, bool frame = true, bool titled = true)
         {
             string prefsKey = PrefsPrefix + "Foldout." + key;
             bool open = !foldout || EditorPrefs.GetBool(prefsKey, openByDefault);
@@ -2136,6 +2136,12 @@ namespace NW.FairyToon.Editor
                 m_Frames.Add(false);
                 return true;
             }
+            if (!titled)
+            {
+                OpenContentBox();
+                m_Frames.Add(true);
+                return true;
+            }
             if (!OpenBox(shown, toggle, block)) return false;
             m_Frames.Add(true);
             return true;
@@ -2144,10 +2150,10 @@ namespace NW.FairyToon.Editor
         // Outer fill is the measured title-bar colour. The inner fill is the darker content, inset so the outer colour reads as a 2px outline.
         private bool OpenBox(string shown, MaterialProperty toggle, PropertyBlock? block)
         {
-            EditorGUILayout.Space(3f);
+            EditorGUILayout.Space(5f);
             EditorGUILayout.BeginVertical(s_Outer);
             Rect row = GUILayoutUtility.GetRect(16f, 22f, GUILayout.ExpandWidth(true));
-            float x = row.x + 4f;
+            float x = row.x + 1f;
             bool enabled = true;
             if (toggle != null)
             {
@@ -2174,6 +2180,14 @@ namespace NW.FairyToon.Editor
             EditorGUILayout.BeginVertical(s_Inner);
             m_InnerDepth++;
             return true;
+        }
+
+        private void OpenContentBox()
+        {
+            EditorGUILayout.Space(5f);
+            EditorGUILayout.BeginVertical(s_Outer);
+            EditorGUILayout.BeginVertical(s_Inner);
+            m_InnerDepth++;
         }
 
         private void CloseBox()
@@ -3024,13 +3038,13 @@ namespace NW.FairyToon.Editor
             // Dark values are the measured lilToon 2.4.1 inspector at 150% scale. Light uses the same two-fill structure.
             Color title = s_ProSkin ? new Color32(90, 89, 90, 255) : new Color32(255, 255, 255, 255);
             Color content = s_ProSkin ? new Color32(57, 56, 57, 255) : new Color32(232, 232, 232, 255);
-            s_Line = title;
+            s_Line = s_ProSkin ? new Color(0.35f, 0.35f, 0.35f, 1f) : new Color(0.4f, 0.4f, 0.4f, 1f);
             s_OuterTex = Solid(title);
             s_InnerTex = Solid(content);
             s_Outer = new GUIStyle
             {
                 margin = new RectOffset(4, 4, 0, 4),
-                padding = new RectOffset(2, 2, 2, 2)
+                padding = new RectOffset(2, 2, 0, 2)
             };
             s_Outer.normal.background = s_OuterTex;
             s_Inner = new GUIStyle { padding = new RectOffset(6, 4, 4, 4) };
