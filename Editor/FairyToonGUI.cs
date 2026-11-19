@@ -97,7 +97,6 @@ namespace NW.FairyToon.Editor
         private static GUIStyle s_Custom;
         private static GUIStyle s_Foldout;
         private static GUIStyle s_Gear;
-        private static Texture2D s_OuterTex;
         private static Texture2D s_InnerTex;
         private static Color s_Line;
         private bool m_AlphaMaskAdvanced;
@@ -3272,39 +3271,55 @@ namespace NW.FairyToon.Editor
             }
             s_HeaderLabel = new GUIStyle(EditorStyles.label) { alignment = TextAnchor.MiddleLeft, fontStyle = FontStyle.Normal };
             s_HeaderLabel.normal.textColor = s_Foldout.normal.textColor;
-            if (s_OuterTex != null) UnityEngine.Object.DestroyImmediate(s_OuterTex);
             if (s_InnerTex != null) UnityEngine.Object.DestroyImmediate(s_InnerTex);
-            // Dark values are the measured lilToon 2.4.1 inspector at 150% scale. Light uses the same two-fill structure.
-            Color title = s_ProSkin ? new Color32(90, 89, 90, 255) : new Color32(255, 255, 255, 255);
+            // Section boxes use lilToon's 12px GUI textures and InitializeBox metrics. The header gap stays Space(2).
             Color content = s_ProSkin ? new Color32(57, 56, 57, 255) : new Color32(232, 232, 232, 255);
             s_Line = s_ProSkin ? new Color(0.35f, 0.35f, 0.35f, 1f) : new Color(0.4f, 0.4f, 0.4f, 1f);
-            s_OuterTex = Rounded(title);
             s_InnerTex = Rounded(content);
-            s_Outer = new GUIStyle
-            {
-                border = new RectOffset(4, 4, 4, 4),
-                margin = new RectOffset(4, 4, 0, 4),
-                padding = new RectOffset(2, 2, 0, 2)
-            };
-            s_Outer.normal.background = s_OuterTex;
-            s_InnerHalf = new GUIStyle
-            {
-                border = new RectOffset(4, 4, 4, 4),
-                margin = new RectOffset(2, 2, 2, 2),
-                padding = new RectOffset(2, 2, 2, 2)
-            };
-            s_InnerHalf.normal.background = s_InnerTex;
-            s_InnerFull = new GUIStyle(s_InnerHalf);
+            string skin = s_ProSkin ? "dark" : "light";
+            s_Outer = BoxStyle(4, 4, 2, GuiBox("gui_box_outer_" + skin));
+            s_Outer.margin.top = 0;
+            s_InnerHalf = BoxStyle(4, 2, 2, GuiBox("gui_box_inner_half_" + skin));
+            s_InnerFull = BoxStyle(4, 2, 2, GuiBox("gui_box_inner_" + skin));
             s_Custom = new GUIStyle
             {
                 border = new RectOffset(6, 6, 6, 6),
                 margin = new RectOffset(4, 4, 4, 4),
-                padding = new RectOffset(4, 4, 4, 4)
+                padding = new RectOffset(4, 4, 4, 4),
+                overflow = new RectOffset(0, 0, 0, 0)
             };
             s_Custom.normal.background = s_InnerTex;
             s_Inner = s_InnerHalf;
             s_Box = s_Outer;
             s_Gear = new GUIStyle(GUIStyle.none) { alignment = TextAnchor.MiddleCenter };
+        }
+
+        private static GUIStyle BoxStyle(int border, int margin, int padding, Texture2D texture)
+        {
+            var style = new GUIStyle
+            {
+                border = new RectOffset(border, border, border, border),
+                margin = new RectOffset(margin, margin, margin, margin),
+                padding = new RectOffset(padding, padding, padding, padding),
+                overflow = new RectOffset(0, 0, 0, 0)
+            };
+            style.normal.background = texture;
+            return style;
+        }
+
+        private static Texture2D GuiBox(string name)
+        {
+            string[] guids = AssetDatabase.FindAssets(name + " t:Texture2D");
+            for (int i = 0; i < guids.Length; i++)
+            {
+                string path = AssetDatabase.GUIDToAssetPath(guids[i]);
+                if (path == null || !path.EndsWith("/" + name + ".png", StringComparison.Ordinal)) continue;
+                if (path.IndexOf("FairyToon", StringComparison.OrdinalIgnoreCase) < 0
+                    && path.IndexOf("fairytoon", StringComparison.OrdinalIgnoreCase) < 0) continue;
+                var texture = AssetDatabase.LoadAssetAtPath<Texture2D>(path);
+                if (texture != null) return texture;
+            }
+            return null;
         }
 
         private static Texture2D Rounded(Color color)

@@ -8,7 +8,7 @@ Some inspector wording and the shape of the material inspector are adapted from 
 
 - Project: https://github.com/lilxyzw/lilToon
 - Commit: e698a2f791bd28dd1aabf227c74f14bedeca3587
-- Files used as reference: `Assets/lilToon/Editor/lilEnumeration.cs`, `lilLanguageManager.cs`, `lilEditorGUI.cs`, `lilInspector/lilInspector.cs`, `lilInspector/lilGUIUtility.cs`, `lilInspector/lilMainInspectorGUI.cs`, `lilInspector/lilSettingAndPresetGUI.cs`, `lilInspector/lilMaterialProperties.cs`, `Editor/Localization/en-US.po`, `ja-JP.po`, `zh-Hans.po`
+- Files used as reference: `Assets/lilToon/Editor/lilEnumeration.cs`, `lilLanguageManager.cs`, `lilEditorGUI.cs`, `lilInspector/lilInspector.cs`, `lilInspector/lilGUIUtility.cs`, `lilInspector/lilMainInspectorGUI.cs`, `lilInspector/lilSettingAndPresetGUI.cs`, `lilInspector/lilMaterialProperties.cs`, `Editor/Localization/en-US.po`, `ja-JP.po`, `zh-Hans.po`, `Editor/Resources/gui_box_outer_*.png`, `gui_box_inner_*.png`, `gui_box_inner_half_*.png`, `gui_custom_box_*.png`
 
 Adapted in this package:
 
@@ -17,7 +17,7 @@ Adapted in this package:
 - `Editor/FairyToonClipboard.cs` (accumulating `CopiedProperties` / `CopiedVectorProperties`, Copy, Paste, Paste with texture, Reset)
 - `Editor/FairyToonGUI.cs` (Advanced / Preset / Shader Setting toolbar, row search, Shuriken foldout header, parent and child gears, localized enum options, section order, and the outer/inner box layout from `lilEditorGUI.InitializeBox` and `InitializeGUIStyles`)
 
-The box fills are generated in the inspector. They are not copies of lilToon's GUI textures. The dark-skin colours match a measured lilToon 2.4.1 inspector: title bar (90, 89, 90), content (57, 56, 57), and a 2px outline in the title colour.
+`Editor/Resources/gui_box_*.png` and `gui_custom_box_*.png` are the lilToon 2.4.1 GUI textures, copied under the MIT license above. The inspector uses them with the same `InitializeBox` border, margin and padding as `lilEditorGUI`. The untitled Base box still uses a generated fill until its own change.
 
 The license text below is the `LICENSE` file at that commit.
 
