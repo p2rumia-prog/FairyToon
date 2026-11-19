@@ -2253,53 +2253,116 @@ namespace NW.FairyToon.Editor
             var tex = Prop(texture);
             if (tex == null) return;
             Vector4 st = tex.textureScaleAndOffset;
-            float scaleX = st.x;
-            float scaleY = st.y;
-            float posX;
-            float posY;
-            if (scaleX == 0f) { posX = 0.5f; scaleX = 0.000001f; }
-            else { posX = (0.5f - st.z) / scaleX; scaleX = 1f / scaleX; }
-            if (scaleY == 0f) { posY = 0.5f; scaleY = 0.000001f; }
-            else { posY = (0.5f - st.w) / scaleY; scaleY = 1f / scaleY; }
-            posX = Mathf.Round(posX * 1000000f) / 1000000f;
-            posY = Mathf.Round(posY * 1000000f) / 1000000f;
-            scaleX = Mathf.Round(scaleX * 1000000f) / 1000000f;
-            scaleY = Mathf.Round(scaleY * 1000000f) / 1000000f;
+            DecodeDecalAxis(st.x, st.z, out float posX, out float scaleX);
+            DecodeDecalAxis(st.y, st.w, out float posY, out float scaleY);
             int copyMode = 0;
             if (copy != null && Number(copy) > 0.5f) copyMode = 1;
             if (flipCopy != null && Number(flipCopy) > 0.5f) copyMode = 2;
-            EditorGUI.BeginChangeCheck();
             if (copyMode > 0 && posX < 0.5f) posX = 1f - posX;
             float nextX = posX;
             float nextY = posY;
             float nextScaleX = scaleX;
             float nextScaleY = scaleY;
-            if (!Searching || Hit("Position X")) nextX = EditorGUILayout.Slider("Position X", posX, copyMode > 0 ? 0.5f : 0f, 1f);
-            if (!Searching || Hit("Position Y")) nextY = EditorGUILayout.Slider("Position Y", posY, 0f, 1f);
-            if (!Searching || Hit("Scale X")) nextScaleX = EditorGUILayout.Slider("Scale X", scaleX, -1f, 1f);
-            if (!Searching || Hit("Scale Y")) nextScaleY = EditorGUILayout.Slider("Scale Y", scaleY, -1f, 1f);
-            if (!EditorGUI.EndChangeCheck()) return;
-            bool changeX = !Mathf.Approximately(nextX, posX);
-            bool changeY = !Mathf.Approximately(nextY, posY);
-            bool changeScaleX = !Mathf.Approximately(nextScaleX, scaleX);
-            bool changeScaleY = !Mathf.Approximately(nextScaleY, scaleY);
+            bool changeX = DecalSlider(tex, copyMode > 0 ? tex.name + "_ST.z" : tex.name + "_ST.z", "Position X", posX, copyMode > 0 ? 0.5f : 0f, 1f, ref nextX);
+            bool changeY = DecalSlider(tex, tex.name + "_ST.w", "Position Y", posY, 0f, 1f, ref nextY);
+            bool changeScaleX = DecalSlider(tex, tex.name + "_ST.x", "Scale X", scaleX, -1f, 1f, ref nextScaleX);
+            bool changeScaleY = DecalSlider(tex, tex.name + "_ST.y", "Scale Y", scaleY, -1f, 1f, ref nextScaleY);
+            if (!changeX && !changeY && !changeScaleX && !changeScaleY) return;
+            Vector4 proposed = DecalVector(st, copyMode, changeX, changeY, changeScaleX, changeScaleY, nextX, nextY, nextScaleX, nextScaleY);
+            if (OfferTextureScale(tex, proposed)) return;
             if (tex.targets == null) return;
-            Undo.RecordObjects(tex.targets, "Modify Decal");
-            foreach (Object target in tex.targets)
+            Undo.IncrementCurrentGroup();
+            int group = Undo.GetCurrentGroup();
+            try
             {
-                var material = target as Material;
-                if (material == null || !material.HasProperty(texture)) continue;
-                Vector4 current = material.GetVector(texture + "_ST");
-                float sx = current.x;
-                float sy = current.y;
-                float oz = current.z;
-                float ow = current.w;
-                if (changeScaleX) sx = 1f / (nextScaleX == 0f ? 0.000001f : nextScaleX);
-                if (changeScaleY) sy = 1f / (nextScaleY == 0f ? 0.000001f : nextScaleY);
-                if (changeX) oz = (-nextX * (sx == 0f ? 0.000001f : sx)) + 0.5f;
-                if (changeY) ow = (-nextY * (sy == 0f ? 0.000001f : sy)) + 0.5f;
-                material.SetVector(texture + "_ST", new Vector4(sx, sy, oz, ow));
+                foreach (Object target in tex.targets)
+                {
+                    var material = target as Material;
+                    if (material == null || !material.HasProperty(texture) || Locked(material, texture + "_ST")) continue;
+                    Vector4 current = material.GetVector(texture + "_ST");
+                    int mode = CopyModeOf(material, copy, flipCopy);
+                    Vector4 next = DecalVector(current, mode, changeX, changeY, changeScaleX, changeScaleY, nextX, nextY, nextScaleX, nextScaleY);
+                    if (next == current) continue;
+                    Undo.RecordObject(material, "Modify Decal");
+                    material.SetVector(texture + "_ST", next);
+                    FairyToonMaterialSetup.Apply(material);
+                }
             }
+            finally { Undo.CollapseUndoOperations(group); }
+        }
+
+        // A scale edit has to rebuild that axis's offset. Keeping the old offset slides the decal.
+        private static Vector4 DecalVector(Vector4 stored, int copyMode, bool changeX, bool changeY, bool changeScaleX, bool changeScaleY, float nextX, float nextY, float nextScaleX, float nextScaleY)
+        {
+            DecodeDecalAxis(stored.x, stored.z, out float posX, out float scaleX);
+            DecodeDecalAxis(stored.y, stored.w, out float posY, out float scaleY);
+            if (copyMode > 0 && posX < 0.5f) posX = 1f - posX;
+            if (changeX) posX = nextX;
+            if (changeY) posY = nextY;
+            if (changeScaleX) scaleX = nextScaleX;
+            if (changeScaleY) scaleY = nextScaleY;
+            Vector4 next = stored;
+            if (changeX || changeScaleX) EncodeDecalAxis(posX, scaleX, out next.x, out next.z);
+            if (changeY || changeScaleY) EncodeDecalAxis(posY, scaleY, out next.y, out next.w);
+            return next;
+        }
+
+        private bool DecalSlider(MaterialProperty tex, string alt, string label, float current, float min, float max, ref float value)
+        {
+            if (Searching && !Hit(label) && !Hit(alt)) return false;
+            Rect row = EditorGUILayout.GetControlRect();
+            BeginScope(row, tex);
+            try
+            {
+                EditorGUI.BeginChangeCheck();
+                value = EditorGUI.Slider(row, Event.current.alt ? alt : label, current, min, max);
+                return EditorGUI.EndChangeCheck();
+            }
+            finally { EndScope(); }
+        }
+
+        private static void DecodeDecalAxis(float storedScale, float storedOffset, out float pos, out float scale)
+        {
+            if (storedScale == 0f) { pos = 0.5f; scale = 0.000001f; }
+            else { pos = (0.5f - storedOffset) / storedScale; scale = 1f / storedScale; }
+            pos = Round6(pos);
+            scale = Round6(scale);
+        }
+
+        private static void EncodeDecalAxis(float pos, float scale, out float storedScale, out float storedOffset)
+        {
+            if (scale == 0f) scale = 0.000001f;
+            storedScale = 1f / scale;
+            storedOffset = (-pos * storedScale) + 0.5f;
+        }
+
+        private static float Round6(float value) => Mathf.Floor(value * 1000000f + 0.5f) * 0.000001f;
+
+        private static int CopyModeOf(Material material, MaterialProperty copy, MaterialProperty flipCopy)
+        {
+            if (flipCopy != null && material.HasProperty(flipCopy.name) && material.GetFloat(flipCopy.name) > 0.5f) return 2;
+            if (copy != null && material.HasProperty(copy.name) && material.GetFloat(copy.name) > 0.5f) return 1;
+            return 0;
+        }
+
+        private static bool OfferTextureScale(MaterialProperty tex, Vector4 value)
+        {
+            if (tex.applyPropertyCallback == null) return false;
+            bool handled = false;
+            MaterialProperty.ApplyPropertyCallback original = tex.applyPropertyCallback;
+            tex.applyPropertyCallback = (changed, mask, previous) =>
+            {
+                handled = original(changed, mask, previous);
+                return true;
+            };
+            try { tex.textureScaleAndOffset = value; }
+            finally { tex.applyPropertyCallback = original; }
+            return handled;
+        }
+
+        private static bool Locked(Material material, string name)
+        {
+            return material.isVariant && material.IsPropertyLockedByAncestor(name);
         }
 
         private static void WriteAlpha(MaterialProperty prop, float alpha)
