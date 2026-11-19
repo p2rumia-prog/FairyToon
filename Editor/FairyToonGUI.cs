@@ -2654,18 +2654,34 @@ namespace NW.FairyToon.Editor
                 if ((wantScale && Locked(material, scale.name)) || (wantOffset && Locked(material, offset.name)))
                     pairLocked = true;
             }
+            float previousScale = Number(scale);
+            float previousOffset = Number(offset);
             Undo.IncrementCurrentGroup();
             int group = Undo.GetCurrentGroup();
+            Exception failure = null;
             try
             {
                 bool scaleHandled = false;
                 bool offsetHandled = false;
-                if (!pairLocked)
+                try
                 {
-                    scaleHandled = !wantScale || OfferFloat(scale, callbackScale);
-                    offsetHandled = !wantOffset || OfferFloat(offset, callbackOffset);
+                    if (!pairLocked)
+                    {
+                        if (wantScale) scaleHandled = OfferFloat(scale, callbackScale);
+                        if (wantOffset) offsetHandled = OfferFloat(offset, callbackOffset);
+                    }
                 }
-                if (scaleHandled && offsetHandled) return;
+                catch (Exception ex)
+                {
+                    failure = ex;
+                }
+                bool paired = failure == null && !pairLocked && (!wantScale || scaleHandled) && (!wantOffset || offsetHandled);
+                if (!paired)
+                {
+                    if (scaleHandled) OfferFloat(scale, previousScale);
+                    if (offsetHandled) OfferFloat(offset, previousOffset);
+                }
+                if (paired) return;
                 foreach (Object target in scale.targets)
                 {
                     var material = target as Material;
@@ -2687,6 +2703,7 @@ namespace NW.FairyToon.Editor
                     if (writeOffset) material.SetFloat(offset.name, nextOffset);
                     FairyToonMaterialSetup.Apply(material);
                 }
+                if (failure != null) throw failure;
             }
             finally { Undo.CollapseUndoOperations(group); }
         }
