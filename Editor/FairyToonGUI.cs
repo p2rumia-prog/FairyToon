@@ -65,6 +65,8 @@ namespace NW.FairyToon.Editor
         private static readonly HashSet<Object> s_ConsumedTargets = new HashSet<Object>();
         private static readonly HashSet<Object> s_DirectTargets = new HashSet<Object>();
         private static readonly HashSet<Object> s_NativeChanged = new HashSet<Object>();
+        private static readonly HashSet<Object> s_PendingSkip = new HashSet<Object>();
+        private static readonly HashSet<Object> s_InspectorTargets = new HashSet<Object>();
         private static readonly Dictionary<Object, NativeState> s_NativeBefore = new Dictionary<Object, NativeState>();
         private static bool s_InspectorPass;
         private static bool s_MenuOperation;
@@ -79,8 +81,17 @@ namespace NW.FairyToon.Editor
             {
                 Object target = property.targets[i];
                 if (target == null) continue;
-                if (handled) s_ConsumedTargets.Add(target);
-                else s_DirectTargets.Add(target);
+                if (handled)
+                {
+                    s_ConsumedTargets.Add(target);
+                    // Only this setter's validation is skipped. An earlier direct write stays in s_DirectTargets.
+                    s_PendingSkip.Add(target);
+                }
+                else
+                {
+                    s_DirectTargets.Add(target);
+                    s_PendingSkip.Remove(target);
+                }
             }
         }
 
@@ -89,6 +100,8 @@ namespace NW.FairyToon.Editor
             s_ConsumedTargets.Clear();
             s_DirectTargets.Clear();
             s_NativeChanged.Clear();
+            s_PendingSkip.Clear();
+            s_InspectorTargets.Clear();
             s_NativeBefore.Clear();
             s_InspectorPass = false;
             s_PostPassesLeft = 0;
@@ -101,6 +114,7 @@ namespace NW.FairyToon.Editor
             {
                 var material = target as Material;
                 if (material == null) continue;
+                s_InspectorTargets.Add(material);
                 s_NativeBefore[material] = new NativeState
                 {
                     RawQueue = material.rawRenderQueue,
@@ -123,36 +137,23 @@ namespace NW.FairyToon.Editor
             }
         }
 
-        private static int MaterialCount(MaterialEditor editor)
-        {
-            int count = 0;
-            foreach (Object target in editor.targets)
-                if (target is Material) count++;
-            return count;
-        }
-
         public override void ValidateMaterial(Material material)
         {
             if (material == null) return;
-            bool consumedOnly = s_ConsumedTargets.Contains(material) && !s_DirectTargets.Contains(material);
+            // This setter's callback kept the write. Do not Apply just because an earlier write was direct.
+            if (s_PendingSkip.Remove(material)) return;
             if (s_InspectorPass || s_MenuOperation)
             {
-                // The callback kept this target's write. Every target of that write is listed, so the
-                // second material is not sent through Apply.
-                if (consumedOnly) return;
                 s_DirectTargets.Add(material);
                 FairyToonMaterialSetup.Apply(material);
                 return;
             }
-            if (s_PostPassesLeft > 0)
+            if (s_PostPassesLeft > 0 && s_InspectorTargets.Contains(material))
             {
                 s_PostPassesLeft--;
-                bool finish = s_PostPassesLeft == 0;
-                // A search keystroke changes the GUI without writing a material. Apply only a target
-                // whose property write hit the asset, or whose queue / instancing / GI field changed.
-                if (s_NativeChanged.Contains(material) || (s_DirectTargets.Contains(material) && !consumedOnly))
-                    FairyToonMaterialSetup.Apply(material);
-                if (finish) ClearValidationScope();
+                // Direct writes already ran Apply in their own setter validation.
+                if (s_NativeChanged.Contains(material)) FairyToonMaterialSetup.Apply(material);
+                if (s_PostPassesLeft == 0) ClearValidationScope();
                 return;
             }
             FairyToonMaterialSetup.Apply(material);
@@ -177,6 +178,7 @@ namespace NW.FairyToon.Editor
             if (properties != null)
                 for (int i = 0; i < properties.Length; i++)
                     WrapCallback(properties[i], wrapped);
+            bool exitGui = false;
             try
             {
                 InitStyles();
@@ -199,15 +201,27 @@ namespace NW.FairyToon.Editor
                         throw new InvalidOperationException("Unhandled FairyToon editor mode " + FairyToonL10n.Mode);
                 }
             }
+            catch (ExitGUIException)
+            {
+                // Rendering and Fur mode popups leave the GUI here. The post-pass count must not
+                // survive to a later ValidateMaterial that was not part of this draw.
+                exitGui = true;
+                throw;
+            }
             finally
             {
                 RestoreCallbacks(wrapped);
                 s_InspectorPass = false;
-                NoteNativeChanges();
-                // MaterialEditor validates each material after OnGUI only when something in the GUI changed.
-                // Leave the per-material result up for that pass, then drop it so it cannot block a later call.
-                if (GUI.changed) s_PostPassesLeft = MaterialCount(materialEditor);
-                else ClearValidationScope();
+                if (exitGui)
+                {
+                    ClearValidationScope();
+                }
+                else
+                {
+                    NoteNativeChanges();
+                    if (GUI.changed) s_PostPassesLeft = s_InspectorTargets.Count;
+                    else ClearValidationScope();
+                }
             }
         }
 
