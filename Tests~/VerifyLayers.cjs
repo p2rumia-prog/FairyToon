@@ -2295,7 +2295,7 @@ test('fractional dissolve selectors round like lilToon and real Mermaid position
 
 test('dissolve position GUI edits one mixed-selection component and noise controls stay uniform defaults', () => {
     const gui=read('Editor/FairyToonGUI.cs'),position=hlslBody(gui,'DissolvePosition');
-    const onGUI=hlslBody(gui.slice(gui.indexOf('class FairyToonGUI')),'OnGUI');
+    const onGUI=hlslBody(gui,'DrawAdvanced');
     const order=['Glitter();','Gem();','Outline();','Dissolve();','Refraction();','Fur();','SeeThrough();','Stencil();','Rendering();'];
     for(let i=1;i<order.length;i++) assert.ok(onGUI.indexOf(order[i])>onGUI.indexOf(order[i-1]),'lilToon section order '+order[i]);
     assert.match(onGUI,/if \(AnyRunsWholeDissolve\(\)\) Dissolve\(\);/);
@@ -2459,8 +2459,8 @@ test('Mermaid gamma HDR colour flags match lilToon in every shader without chang
     }
     const gui = read('Editor/FairyToonGUI.cs');
     assert.match(gui, /class FairyToonHDRDrawer : MaterialPropertyDrawer/);
-    assert.match(gui, /EditorGUI\.ColorField\(position, new GUIContent\(label\), prop\.colorValue, true, true, true\)/);
-    assert.match(gui, /TexturePropertyWithHDRColor\(new GUIContent\(label\), tex, other, true\)/);
+    assert.match(gui, /EditorGUI\.ColorField\(position, new GUIContent\(FairyToonL10n\.Text\(label\)\), prop\.colorValue, true, true, true\)/);
+    assert.match(gui, /TexturePropertyWithHDRColor\(content, tex, other, true\)/);
     assert.ok(!/prop\.colorValue\s*=.*\.(?:linear|gamma)/.test(gui), 'drawer preserves raw authored values');
     const coreAndInput = read('Shaders/FairyToonCore.hlsl') + input;
     assert.ok(!/(?:SRGBToLinear|GammaToLinearSpace)\(_(?:Color2nd|Color3rd|BacklightColor|(?:Main2nd|Main3rd)?DissolveColor)\)/.test(coreAndInput), 'no double decode');

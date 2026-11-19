@@ -105,6 +105,7 @@ namespace NW.FairyToon.Editor
             string undo = shouldCopyTex ? "FairyToon Paste (with textures)" : "FairyToon Paste";
             int group = BeginUndo(editor, undo);
             var coverage = SnapshotCoverage(editor);
+            int writes = 0;
             for (int i = 0; i < FairyToonPropertyBlocks.All.Length; i++)
             {
                 FairyToonPropertyEntry entry = FairyToonPropertyBlocks.All[i];
@@ -114,14 +115,16 @@ namespace NW.FairyToon.Editor
                 MaterialProperty dest = Find(props, entry.Name);
                 if (dest == null) continue;
                 ApplyValue(dest, source);
+                writes++;
                 if (!entry.IsTexture || !shouldCopyTex) continue;
                 string st = entry.Name + "_ST";
                 if (CopiedVectorProperties.ContainsKey(st) && material.HasProperty(st))
+                {
                     material.SetVector(st, CopiedVectorProperties[st]);
+                    writes++;
+                }
             }
-            MigrateCoverage(coverage);
-            ApplyMaterials(editor);
-            Undo.CollapseUndoOperations(group);
+            FinishEdit(editor, group, coverage, writes);
         }
 
         internal static void ResetProperties(PropertyBlock block, MaterialEditor editor, MaterialProperty[] props)
@@ -129,6 +132,7 @@ namespace NW.FairyToon.Editor
             if (props == null) return;
             int group = BeginUndo(editor, "FairyToon Reset");
             var coverage = SnapshotCoverage(editor);
+            int writes = 0;
             for (int i = 0; i < props.Length; i++)
             {
                 MaterialProperty prop = props[i];
@@ -160,9 +164,25 @@ namespace NW.FairyToon.Editor
                     default:
                         throw new InvalidOperationException("Unhandled shader property type " + prop.propertyType);
                 }
+                writes++;
             }
-            MigrateCoverage(coverage);
-            ApplyMaterials(editor);
+            FinishEdit(editor, group, coverage, writes);
+        }
+
+        private static void FinishEdit(MaterialEditor editor, int group, List<CoverageSnapshot> coverage, int writes)
+        {
+            if (writes == 0)
+            {
+                Undo.RevertAllDownToGroup(group);
+                return;
+            }
+            // Property writes already go through the inspector descriptors. Apply rewrites blend, queue
+            // and passes on the material asset, so skip it while an animation callback owns the write.
+            if (!AnimationMode.InAnimationMode())
+            {
+                MigrateCoverage(coverage);
+                ApplyMaterials(editor);
+            }
             Undo.CollapseUndoOperations(group);
         }
 
@@ -202,7 +222,7 @@ namespace NW.FairyToon.Editor
         private static List<CoverageSnapshot> SnapshotCoverage(MaterialEditor editor)
         {
             var shots = new List<CoverageSnapshot>();
-            foreach (Object target in editor.targets)
+            foreach (UnityEngine.Object target in editor.targets)
             {
                 var material = target as Material;
                 if (material == null) continue;

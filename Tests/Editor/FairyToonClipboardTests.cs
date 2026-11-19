@@ -81,7 +81,7 @@ namespace NW.FairyToon.Editor.Tests
             first.SetTexture("_MatCapTex", null);
             second.SetTexture("_MatCapTex", null);
             MaterialProperty[] sourceProps = Properties(source);
-            MaterialEditor destEditor = (MaterialEditor)Editor.CreateEditor(new Object[] { first, second });
+            MaterialEditor destEditor = (MaterialEditor)UnityEditor.Editor.CreateEditor(new Object[] { first, second });
             Track(destEditor);
             MaterialProperty[] destProps = MaterialEditor.GetMaterialProperties(new Object[] { first, second });
 
@@ -127,12 +127,13 @@ namespace NW.FairyToon.Editor.Tests
         public void BasePasteMigratesTheDefaultCoverageQueue()
         {
             Shader shader = Shader.Find(FairyToon.ShaderName);
-            if (shader == null) Assert.Ignore("FairyToon shader is not imported.");
+            Assert.IsNotNull(shader, "FairyToon shader must be imported. EditMode tests fail instead of skipping a missing shader.");
             Material opaque = Track(new Material(shader));
             Material cutout = Track(new Material(shader));
             FairyToonMaterialSetup.SetRenderingMode(opaque, FairyToonMaterialSetup.Opaque);
             FairyToonMaterialSetup.SetRenderingMode(cutout, FairyToonMaterialSetup.Cutout);
             Assert.AreEqual(2450, cutout.renderQueue);
+            bool shadowBefore = cutout.GetShaderPassEnabled("ShadowCaster");
             MaterialProperty[] sourceProps = Properties(opaque);
             MaterialProperty[] destProps = Properties(cutout);
             FairyToonClipboard.CopyProperties(PropertyBlock.Base, EditorFor(opaque), sourceProps);
@@ -140,18 +141,47 @@ namespace NW.FairyToon.Editor.Tests
             Assert.AreEqual(FairyToonMaterialSetup.Opaque, FairyToonMaterialSetup.GetRenderingMode(cutout));
             Assert.AreEqual(2000, cutout.renderQueue);
             Assert.IsFalse(cutout.IsKeywordEnabled("_ALPHATEST_ON"));
+            bool shadowAfter = cutout.GetShaderPassEnabled("ShadowCaster");
+            Undo.PerformUndo();
+            Assert.AreEqual(FairyToonMaterialSetup.Cutout, FairyToonMaterialSetup.GetRenderingMode(cutout));
+            Assert.AreEqual(2450, cutout.renderQueue);
+            Assert.IsTrue(cutout.IsKeywordEnabled("_ALPHATEST_ON"));
+            Assert.AreEqual(shadowBefore, cutout.GetShaderPassEnabled("ShadowCaster"));
+            Assert.AreEqual(shadowAfter, cutout.GetShaderPassEnabled("ShadowCaster"));
+        }
+
+        [Test]
+        public void LegacyShaderLabIntIsFloatBacked()
+        {
+            Shader shader = Shader.Find(FairyToon.ShaderName);
+            Assert.IsNotNull(shader, "FairyToon shader must be imported. EditMode tests fail instead of skipping a missing shader.");
+            AssertFloatBacked(shader, "_UseOutline");
+            AssertFloatBacked(shader, "_AlphaMaskMode");
+            AssertFloatBacked(shader, "_ShadingModel");
+            AssertFloatBacked(shader, "_EFPart");
+            Shader fur = Shader.Find(FairyToonMaterialSetup.FurShaderName);
+            Assert.IsNotNull(fur, "FairyToon/Fur must be imported.");
+            AssertFloatBacked(fur, "_FurMode");
         }
 
         private Material NewMaterial()
         {
             Shader shader = Shader.Find(FairyToon.ShaderName);
-            if (shader == null) Assert.Ignore("FairyToon shader is not imported.");
+            Assert.IsNotNull(shader, "FairyToon shader must be imported. EditMode tests fail instead of skipping a missing shader.");
             return Track(new Material(shader));
+        }
+
+        private static void AssertFloatBacked(Shader shader, string name)
+        {
+            int index = shader.FindPropertyIndex(name);
+            Assert.GreaterOrEqual(index, 0, name);
+            Assert.AreEqual(UnityEngine.Rendering.ShaderPropertyType.Float, shader.GetPropertyType(index),
+                name + " is ShaderLab Int/Float/Range, which Unity stores as a float. Integer is the real int type.");
         }
 
         private MaterialEditor EditorFor(Material material)
         {
-            return Track((MaterialEditor)Editor.CreateEditor(material));
+            return Track((MaterialEditor)UnityEditor.Editor.CreateEditor(material));
         }
 
         private static MaterialProperty[] Properties(Material material)

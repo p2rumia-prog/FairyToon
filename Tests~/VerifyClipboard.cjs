@@ -21,10 +21,13 @@ if (!pasteFn.includes('!shouldCopyTex && entry.IsTexture')) errors.push('Paste m
 if (!pasteFn.includes('CopiedVectorProperties')) errors.push('Paste with texture must apply stored _ST');
 if (/GetMaterialProperties/.test(copyFn) || /GetMaterialProperties/.test(pasteFn))
   errors.push('Copy and Paste must use the MaterialProperty array from OnGUI, not GetMaterialProperties');
-if (!pasteFn.includes('MigrateCoverage')) errors.push('Paste must migrate the main-shader queue in the same undo step');
+if (!pasteFn.includes('FinishEdit')) errors.push('Paste must finish through the shared undo step');
 const resetFn = clipCs.slice(clipCs.indexOf('void ResetProperties'), clipCs.indexOf('void ApplyValue'));
-if (/GetMaterialProperties/.test(resetFn) || !resetFn.includes('MigrateCoverage'))
-  errors.push('Reset must use the OnGUI properties and migrate the main-shader queue');
+if (/GetMaterialProperties/.test(resetFn) || !resetFn.includes('FinishEdit'))
+  errors.push('Reset must use the OnGUI properties and the shared undo step');
+const finish = clipCs.slice(clipCs.indexOf('void FinishEdit'), clipCs.indexOf('void ApplyValue'));
+if (!finish.includes('MigrateCoverage') || !finish.includes('writes == 0') || !finish.includes('AnimationMode.InAnimationMode'))
+  errors.push('empty paste/reset and animation-callback writes must not Apply; real edits still migrate the queue');
 
 const table = {};
 const re = /new\("(_[^"]+)", (true|false), ((?:PropertyBlock\.\w+,?\s*)+)\)/g;
@@ -109,7 +112,7 @@ if (!table._Metallic || !table._Metallic.blocks.includes('Reflection') || !table
 
 const gui = fs.readFileSync(path.join(root, 'Editor/FairyToonGUI.cs'), 'utf8');
 function method(name) {
-  const start = gui.indexOf('private void ' + name + '(');
+  const start = gui.search(new RegExp('private (?:void|bool|float) ' + name + '\\('));
   const open = gui.indexOf('{', start);
   let depth = 0;
   for (let i = open; i < gui.length; i++) {
@@ -130,6 +133,15 @@ if (!method('Rendering').includes('_FurCull') || !method('Stencil').includes('_F
   errors.push('Fur render-state rows belong in Rendering and Fur stencil rows in Stencil');
 if (!method('Fur').includes('cutoutLength')) errors.push('Fur cutout length must follow Two Pass or a mixed Fur Mode');
 if (!gui.includes('() => m_Props')) errors.push('the gear menu must pass the OnGUI MaterialProperty array');
+if (!method('Fur').includes('_FurVectorScale')) errors.push('Fur search must include _FurVectorScale, which is drawn on the vector texture row');
+if (!method('DissolvePosition').includes('RowVisible(name, label)')) errors.push('DissolvePosition must be filtered like other rows');
+if (!method('MainColor').includes('PrefixMatches("_FT_Main2nd")')) errors.push('layer dissolve noise names must open the main layer');
+const normals = method('NormalMaps');
+if (normals.indexOf('secondNormal && BeginSection') < 0 || normals.indexOf('firstNormal && BeginSection') < 0)
+  errors.push('normal 1st and 2nd need separate search gates');
+if (method('MainColorFirst').includes('BeginSection(')) errors.push('Main Color 1st is a label and gear, not an extra foldout');
+if (!method('DrawLocalizedEnum').includes('BeginProperty') || !method('DrawLocalizedEnum').includes('EndProperty'))
+  errors.push('localized enums must keep the material property context');
 
 if (errors.length) {
   console.error(errors.join('\n'));
