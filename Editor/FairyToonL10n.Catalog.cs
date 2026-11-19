@@ -510,6 +510,10 @@ namespace NW.FairyToon.Editor
             Add("sMSDFTexture", "MSDF Texture", "MSDF テクスチャ", "MSDF 纹理");
             Add("sAngle", "Angle", "角度", "角度");
             Add("sScroll", "Scroll", "スクロール", "滚动");
+            Add("sPositionX", "Position X", "Position X", "Position X");
+            Add("sPositionY", "Position Y", "Position Y", "Position Y");
+            Add("sScaleX", "Scale X", "Scale X", "Scale X");
+            Add("sScaleY", "Scale Y", "Scale Y", "Scale Y");
             Add("sRotate", "Rotate", "回転", "旋转");
             Add("sHue", "Hue", "色相", "色相");
             Add("sSaturation", "Saturation", "彩度", "饱和度");
