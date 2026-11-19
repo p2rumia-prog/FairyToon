@@ -744,14 +744,12 @@ namespace NW.FairyToon.Editor
                     EditorGUILayout.LabelField(warning, EditorStyles.wordWrappedLabel);
                 return;
             }
-            ConsumeHeaderGap();
-            PushVertical(s_Outer);
+            // The title stays "Alpha Mask" during search. Mode is a row inside the box, not the title popup.
+            if (!OpenBox(FairyToonL10n.Text("sAlphaMask"), null, PropertyBlock.AlphaMask)) return;
             PropertyGearRow("_AlphaMaskMode", "Mode", PropertyBlock.AlphaMask);
             var mode = Prop("_AlphaMaskMode");
             if (mode != null && (mode.hasMixedValue || Number(mode) != 0f))
             {
-                PushVertical(s_InnerHalf);
-                m_InnerDepth++;
                 Tex("_AlphaMask", null, "Alpha Mask");
                 ScaleOffset("_AlphaMask");
                 var scale = Prop("_AlphaMaskScale");
@@ -2062,22 +2060,29 @@ namespace NW.FairyToon.Editor
                 && Searching && RowVisible("_OutlineCull", "sCullMode");
             if (!queue && !fur && !outlineHit) return;
             if (!BeginSection("Rendering", "sRenderingSetting", null, false, PropertyBlock.Rendering, true, false)) return;
-            if ((!Searching || LabelOnly("sRenderingReset")) && GUILayout.Button(FairyToonL10n.Text("sRenderingReset")))
+            if (!Searching || LabelOnly("sRenderingReset"))
             {
-                Undo.RecordObjects(m_Editor.targets, "FairyToon Reset Rendering");
-                foreach (Object target in m_Editor.targets)
+                // lilToon uses one control-rect button, which is 23 px at 150%. GUILayout.Button was 25.
+                Rect reset = EditorGUILayout.GetControlRect();
+                if (GUI.Button(EditorGUI.IndentedRect(reset), FairyToonL10n.Text("sRenderingReset")))
                 {
-                    var material = target as Material;
-                    if (material == null) continue;
-                    FairyToonMaterialSetup.ResetRendering(material);
-                    s_NativeBefore[material] = new NativeState
+                    Undo.RecordObjects(m_Editor.targets, "FairyToon Reset Rendering");
+                    foreach (Object target in m_Editor.targets)
                     {
-                        RawQueue = material.rawRenderQueue,
-                        Instancing = material.enableInstancing,
-                        DoubleSidedGI = material.doubleSidedGI
-                    };
+                        var material = target as Material;
+                        if (material == null) continue;
+                        FairyToonMaterialSetup.ResetRendering(material);
+                        s_NativeBefore[material] = new NativeState
+                        {
+                            RawQueue = material.rawRenderQueue,
+                            Instancing = material.enableInstancing,
+                            DoubleSidedGI = material.doubleSidedGI
+                        };
+                    }
+                    m_Props = MaterialEditor.GetMaterialProperties(m_Editor.targets);
                 }
-                m_Props = MaterialEditor.GetMaterialProperties(m_Editor.targets);
+                // Header gap is 3 px. The button-to-box measurement is 6 px, one pixel more.
+                GUILayout.Space(1f / Mathf.Max(1f, EditorGUIUtility.pixelsPerPoint));
             }
             if (m_Frames.Count > 0) m_Frames.RemoveAt(m_Frames.Count - 1);
             if (queue)
@@ -2133,7 +2138,10 @@ namespace NW.FairyToon.Editor
                 && !SelectedRenderingMode(FairyToonMaterialSetup.Fur)
                 && !SelectedRenderingMode(FairyToonMaterialSetup.Gem)
                 && (!Searching || RowVisible("_OutlineCull", "sCullMode"));
-            if (!outline || !OpenBox(FairyToonL10n.Text("sOutlineSetting"), null, null, true)) return;
+            if (!outline) return;
+            // Sibling margin is 6 px here. lilToon's Rendering-to-Outline gap is 5 px.
+            GUILayout.Space(-1f / Mathf.Max(1f, EditorGUIUtility.pixelsPerPoint));
+            if (!OpenBox(FairyToonL10n.Text("sOutlineSetting"), null, null, true)) return;
             P("_OutlineCull", "sCullMode");
             CloseBox();
         }
@@ -2162,13 +2170,23 @@ namespace NW.FairyToon.Editor
                 if (materials[i].renderQueue != effective) mixedNumber = true;
             }
             Rect row = EditorGUILayout.GetControlRect();
-            Rect popup = row;
-            popup.width = Mathf.Max(0f, popup.width - EditorGUIUtility.fieldWidth - 2f);
-            Rect number = row;
-            number.xMin = number.xMax - EditorGUIUtility.fieldWidth;
+            float labelWidth = EditorGUIUtility.labelWidth;
+            EditorGUI.LabelField(new Rect(row.x, row.y, labelWidth, row.height), FairyToonL10n.Text("Render Queue"));
+            // 75 points is 113 px at 150%, the compact popup beside the number.
+            const float popupWidth = 75f;
+            float numberWidth = EditorGUIUtility.fieldWidth;
+            const float gap = 2f;
+            float x = row.x + labelWidth;
+            Rect popup = new Rect(x, row.y, popupWidth, row.height);
+            Rect number = new Rect(popup.xMax + gap, row.y, numberWidth, row.height);
+            if (number.xMax > row.xMax)
+            {
+                number.x = Mathf.Max(x, row.xMax - numberWidth);
+                popup.width = Mathf.Max(0f, number.x - gap - popup.x);
+            }
             EditorGUI.showMixedValue = mixedPopup;
             EditorGUI.BeginChangeCheck();
-            int picked = EditorGUI.IntPopup(popup, FairyToonL10n.Text("Render Queue"), mixedPopup ? -1 : first, new[]
+            int picked = EditorGUI.IntPopup(popup, mixedPopup ? -1 : first, new[]
             {
                 L10n.Tr("From Shader"), L10n.Tr("Geometry"), L10n.Tr("AlphaTest"), L10n.Tr("Transparent")
             }, new[] { -1, (int)RenderQueue.Geometry, (int)RenderQueue.AlphaTest, (int)RenderQueue.Transparent });
@@ -2315,10 +2333,11 @@ namespace NW.FairyToon.Editor
             string shown = FairyToonL10n.Text(title);
             if (foldout)
             {
-                // lilToon reserves GetRect(16, 20, Shuriken style). That style's fixedHeight is 22,
-                // so the slot is 22 pt: the 28 px bar plus the 5 px shadow at 150%. A 20 pt slot
-                // lets the extra 2 pt paint over the 3 px header gap.
-                float header = s_Foldout != null && s_Foldout.fixedHeight > 0f ? s_Foldout.fixedHeight : 22f;
+                // The style paints 22 pt. A collapsed header keeps a 20 pt slot (30 px at 150%);
+                // the next header covers the extra shadow, leaving 2 px. An open header reserves
+                // the full 22 pt so that shadow stays above the 3 px gap.
+                float painted = s_Foldout != null && s_Foldout.fixedHeight > 0f ? s_Foldout.fixedHeight : 22f;
+                float header = open ? painted : 20f;
                 Rect rect = GUILayoutUtility.GetRect(16f, header, GUILayout.ExpandWidth(true));
                 if (s_Foldout != null) GUI.Box(rect, GUIContent.none, s_Foldout);
                 float x = rect.x + 4f;
