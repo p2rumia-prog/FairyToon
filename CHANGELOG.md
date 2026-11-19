@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.2.3
+
+- Camera-aligned character shadows sample only the caster's own atlas tile. The main-light atlas can still cast between characters, and Unity scene shadows are independent.
+- `FairyToonCharacter` uses the shader user value of its mesh renderers for the atlas owner while enabled and restores the previous value on disable.
+
 ## 0.2.2
 
 - Main Color 2nd/3rd Reset UV matches the ten writes in lilToon 2.4.1. Texture tiling, offset and Scroll/Rotate survive the reset. Animation preview callbacks and grouped Undo still apply.

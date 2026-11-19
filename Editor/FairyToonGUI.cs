@@ -650,7 +650,7 @@ namespace NW.FairyToon.Editor
             bool open = LayoutChoice(key, stored);
             var versionStyle = new GUIStyle(EditorStyles.label) { fontStyle = FontStyle.Bold };
             Rect position = EditorGUILayout.GetControlRect();
-            EditorGUI.LabelField(position, "FairyToon 0.2.2", versionStyle);
+            EditorGUI.LabelField(position, "FairyToon 0.2.3", versionStyle);
             bool nextVersion = EditorGUI.Foldout(position, open, GUIContent.none, true);
             if (nextVersion != stored) EditorPrefs.SetBool(key, nextVersion);
             if (!open) return;
