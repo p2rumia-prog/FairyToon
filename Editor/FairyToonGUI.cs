@@ -361,7 +361,7 @@ namespace NW.FairyToon.Editor
         private void EmissionGroup()
         {
 
-            if (!PrefixMatches("_Emission") && !PrefixMatches("_UseEmission")) return;
+            if (!PrefixMatches("_Emission") && !PrefixMatches("_UseEmission") && !SearchAllows("|ft.Tiling", "|ft.Offset")) return;
             if (!BeginSection("EmissionGroup", "sEmissionSetting", null, false, PropertyBlock.Emission)) return;
             Emission(false);
             Emission(true);
@@ -412,6 +412,12 @@ namespace NW.FairyToon.Editor
         {
             if (!Searching) return true;
             return Hit(key) || Hit(FairyToonL10n.Text(key));
+        }
+
+        private bool UnityRowVisible(string english)
+        {
+            if (!Searching) return true;
+            return Hit(english) || Hit(L10n.Tr(english));
         }
 
         private bool RowVisible(string name, string shown, string tooltip = null)
@@ -526,11 +532,11 @@ namespace NW.FairyToon.Editor
         {
             bool gem = EverySelectedIsGem();
             bool first = gem
-                ? SearchAllows("_MainTex", "_Color")
-                : SearchAllows("_MainTex", "_Color", "_MainTexHSVG", "_MainColorAdjustMask");
+                ? SearchAllows("_MainTex", "_Color", "|ft.Tiling", "|ft.Offset")
+                : SearchAllows("_MainTex", "_Color", "_MainTexHSVG", "_MainColorAdjustMask", "|ft.Tiling", "|ft.Offset", "|sReset");
             bool alpha = SearchAllows("_AlphaMaskMode", "_AlphaMask", "_AlphaMaskScale", "_AlphaMaskValue", "_Cutoff", "|sAlphaMaskWarnOpaque", "|ft.AlphaMaskInvert", "|ft.AlphaMaskTransparency", "|ft.AlphaMaskAdvanced");
-            bool second = PrefixMatches("_Main2nd") || PrefixMatches("_FT_Main2nd") || SearchAllows("_Color2nd", "_UseMain2ndTex", "|UV Line Angle (radians)", "|Decal", "|sMirrorMode", "|sCopyMode");
-            bool third = PrefixMatches("_Main3rd") || PrefixMatches("_FT_Main3rd") || SearchAllows("_Color3rd", "_UseMain3rdTex", "|UV Line Angle (radians)", "|Decal", "|sMirrorMode", "|sCopyMode");
+            bool second = PrefixMatches("_Main2nd") || PrefixMatches("_FT_Main2nd") || SearchAllows("_Color2nd", "_UseMain2ndTex", "|UV Line Angle (radians)", "|Position / Direction (XY UV, XYZ Object, W UV Angle)", "|ft.Tiling", "|ft.Offset", "|Decal", "|sMirrorMode", "|sCopyMode");
+            bool third = PrefixMatches("_Main3rd") || PrefixMatches("_FT_Main3rd") || SearchAllows("_Color3rd", "_UseMain3rdTex", "|UV Line Angle (radians)", "|Position / Direction (XY UV, XYZ Object, W UV Angle)", "|ft.Tiling", "|ft.Offset", "|Decal", "|sMirrorMode", "|sCopyMode");
             if (Searching && !first && !alpha && !second && !third) return;
             if (!BeginSection("Main", "sMainColorSetting", null, true, PropertyBlock.MainColor)) return;
             if (first) MainColorFirst();
@@ -555,9 +561,10 @@ namespace NW.FairyToon.Editor
                 {
                     // lilToon draws the mask, then HSV / Gamma with its own reset. Default is (0, 1, 1, 1).
                     Tex("_MainColorAdjustMask", null, "Color Adjustment Mask");
-                    P("_MainTexHSVG", "Hue / Saturation / Value / Gamma");
+                    if (!Searching || RowVisible("_MainTexHSVG", "Hue / Saturation / Value / Gamma"))
+                        P("_MainTexHSVG", "Hue / Saturation / Value / Gamma");
                     var hsvg = Prop("_MainTexHSVG");
-                    if (hsvg != null && GUILayout.Button(FairyToonL10n.Text("sReset")))
+                    if (hsvg != null && (!Searching || LabelOnly("sReset")) && GUILayout.Button(FairyToonL10n.Text("sReset")))
                         hsvg.vectorValue = new Vector4(0f, 1f, 1f, 1f);
                 }
             }
@@ -1010,7 +1017,7 @@ namespace NW.FairyToon.Editor
         {
 
             string prefix = second ? "_Emission2nd" : "_Emission";
-            if (!PrefixMatches(prefix, second ? null : "_Emission2nd") && !SearchAllows(second ? "_UseEmission2nd" : "_UseEmission")) return;
+            if (!PrefixMatches(prefix, second ? null : "_Emission2nd") && !SearchAllows(second ? "_UseEmission2nd" : "_UseEmission", "|ft.Tiling", "|ft.Offset")) return;
             string prefs = second ? "Emission 2nd" : "Emission";
             string title = second ? "sEmission2nd" : "sEmissionSetting";
             var block = second ? PropertyBlock.Emission2nd : PropertyBlock.Emission1st;
@@ -1740,7 +1747,9 @@ namespace NW.FairyToon.Editor
 
         private void Rendering()
         {
-            bool queue = SearchAllows("|Render Queue", "|Enable GPU Instancing", "|Double Sided Global Illumination", "_SrcBlend", "_DstBlend", "_SrcBlendAlpha", "_DstBlendAlpha", "_ZWrite");
+            bool queue = SearchAllows("|Render Queue", "|Enable GPU Instancing", "|Double Sided Global Illumination",
+                "|" + L10n.Tr("Render Queue"), "|" + L10n.Tr("Enable GPU Instancing"), "|" + L10n.Tr("Double Sided Global Illumination"),
+                "_SrcBlend", "_DstBlend", "_SrcBlendAlpha", "_DstBlendAlpha", "_ZWrite");
             bool fur = SelectedRenderingMode(FairyToonMaterialSetup.Fur) && SearchAllows("_FurCull", "_FurZClip", "_FurZTest", "_FurColorMask", "_FurOffsetFactor", "_FurOffsetUnits", "_FurBlendOp", "_FurBlendOpAlpha", "_FurSrcBlend", "_FurDstBlend", "_FurSrcBlendAlpha", "_FurDstBlendAlpha", "_FurZWrite", "_FurAlphaToMask");
             if (!queue && !fur) return;
             if (!BeginSection("Rendering", "sRenderingSetting", null, false, PropertyBlock.Rendering)) return;
@@ -1759,9 +1768,9 @@ namespace NW.FairyToon.Editor
             EditorGUILayout.BeginVertical(s_Box);
             // Native controls keep raw versus displayed queue, From Shader, deferred commit, variant lock,
             // and the instancing capability check. Search uses the same English labels Unity draws by default.
-            if (RowVisible(null, "Render Queue")) m_Editor.RenderQueueField();
-            if (RowVisible(null, "Enable GPU Instancing")) m_Editor.EnableInstancingField();
-            if (RowVisible(null, "Double Sided Global Illumination")) m_Editor.DoubleSidedGIField();
+            if (UnityRowVisible("Render Queue")) m_Editor.RenderQueueField();
+            if (UnityRowVisible("Enable GPU Instancing")) m_Editor.EnableInstancingField();
+            if (UnityRowVisible("Double Sided Global Illumination")) m_Editor.DoubleSidedGIField();
             if (SelectedRenderingMode(FairyToonMaterialSetup.Fur))
             {
                 SubHeader("Fur Rendering");
