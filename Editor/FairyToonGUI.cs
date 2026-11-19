@@ -2015,8 +2015,6 @@ namespace NW.FairyToon.Editor
             P("_ZTest");
             P("_OffsetFactor");
             P("_OffsetUnits");
-            if (!SelectedRenderingMode(FairyToonMaterialSetup.Fur) && !SelectedRenderingMode(FairyToonMaterialSetup.Gem))
-                P("_OutlineCull");
             if (AnyCoverage(FairyToonMaterialSetup.Cutout))
                 P("_AlphaToMask", "Alpha To Coverage (hair)");
             if (SelectedRenderingMode(FairyToonMaterialSetup.Fur))
@@ -2054,6 +2052,18 @@ namespace NW.FairyToon.Editor
             if (UnityRowVisible("Double Sided Global Illumination")) m_Editor.DoubleSidedGIField();
 
             EndSection();
+            // lilToon puts Outline Cull in its own box under Rendering. FairyToon has no separate outline ZTest or colour mask.
+            bool outline = Prop("_OutlineCull") != null
+                && !SelectedRenderingMode(FairyToonMaterialSetup.Fur)
+                && !SelectedRenderingMode(FairyToonMaterialSetup.Gem)
+                && (!Searching || RowVisible("_OutlineCull", null));
+            if (!outline) return;
+            EditorGUILayout.BeginVertical(s_Outer);
+            EditorGUILayout.LabelField(FairyToonL10n.Text("sOutlineSetting"));
+            EditorGUILayout.BeginVertical(s_InnerFull);
+            P("_OutlineCull");
+            EditorGUILayout.EndVertical();
+            EditorGUILayout.EndVertical();
         }
 
         // ---- Layout helpers ----
