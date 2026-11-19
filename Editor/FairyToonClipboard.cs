@@ -131,20 +131,8 @@ namespace NW.FairyToon.Editor
             }
             finally
             {
-                // Keep the per-material result until the asset sync below reads it.
-                for (int i = 0; i < wrapped.Count; i++)
-                    if (wrapped[i].Property != null) wrapped[i].Property.applyPropertyCallback = wrapped[i].Original;
+                FinishMenuOperation(editor, coverage, group, wrapped, callback);
             }
-            if (callback && !FairyToonGUI.WroteAsset)
-            {
-                Undo.CollapseUndoOperations(group);
-                FairyToonGUI.EndMenuOperation(null);
-                return;
-            }
-            MigrateCoverage(coverage);
-            ApplyMaterials(editor);
-            Undo.CollapseUndoOperations(group);
-            FairyToonGUI.EndMenuOperation(null);
         }
 
         internal static void ResetProperties(PropertyBlock block, MaterialEditor editor, MaterialProperty[] props)
@@ -166,19 +154,29 @@ namespace NW.FairyToon.Editor
             }
             finally
             {
-                for (int i = 0; i < wrapped.Count; i++)
-                    if (wrapped[i].Property != null) wrapped[i].Property.applyPropertyCallback = wrapped[i].Original;
+                FinishMenuOperation(editor, coverage, group, wrapped, callback);
             }
-            if (callback && !FairyToonGUI.WroteAsset)
+        }
+
+        // Restores callbacks, syncs materials that actually changed, collapses the undo group,
+        // and clears the menu scope even when a setter throws.
+        private static void FinishMenuOperation(MaterialEditor editor, List<CoverageSnapshot> coverage, int group, List<FairyToonGUI.SavedCallback> wrapped, bool callback)
+        {
+            for (int i = 0; i < wrapped.Count; i++)
+                if (wrapped[i].Property != null) wrapped[i].Property.applyPropertyCallback = wrapped[i].Original;
+            try
             {
+                if (!(callback && !FairyToonGUI.WroteAsset))
+                {
+                    MigrateCoverage(coverage);
+                    ApplyMaterials(editor);
+                }
                 Undo.CollapseUndoOperations(group);
-                FairyToonGUI.EndMenuOperation(null);
-                return;
             }
-            MigrateCoverage(coverage);
-            ApplyMaterials(editor);
-            Undo.CollapseUndoOperations(group);
-            FairyToonGUI.EndMenuOperation(null);
+            finally
+            {
+                FairyToonGUI.EndMenuOperation(null);
+            }
         }
 
         private static bool PasteWouldChange(PropertyBlock block, Material material, MaterialProperty[] props, bool shouldCopyTex, out bool callback)
@@ -352,6 +350,7 @@ namespace NW.FairyToon.Editor
             for (int i = 0; i < shots.Count; i++)
             {
                 CoverageSnapshot shot = shots[i];
+                if (!FairyToonGUI.TargetWroteAsset(shot.Material)) continue;
                 FairyToonMaterialSetup.MigrateMainCoverageQueue(shot.Material, shot.Mode, shot.Queue, shot.RawQueue);
             }
         }

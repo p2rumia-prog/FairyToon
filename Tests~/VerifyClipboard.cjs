@@ -42,8 +42,13 @@ for (const [change, callback, animating, result] of expected)
   if (outcome(change, callback, animating) !== result) errors.push('paste decision table drifted');
 if (pasteFn.indexOf('PasteWouldChange') < 0 || pasteFn.indexOf('PasteWouldChange') > pasteFn.indexOf('BeginUndo'))
   errors.push('Paste must return before recording undo when nothing changes');
-if (pasteFn.indexOf('callback && !FairyToonGUI.WroteAsset') < 0 || pasteFn.indexOf('WroteAsset') > pasteFn.indexOf('ApplyMaterials'))
+const finishFn = clipCs.slice(clipCs.indexOf('void FinishMenuOperation'), clipCs.indexOf('private static bool PasteWouldChange'));
+if (!finishFn.includes('callback && !FairyToonGUI.WroteAsset') || finishFn.indexOf('WroteAsset') > finishFn.indexOf('ApplyMaterials'))
   errors.push('a callback that kept the write must return before Apply');
+if (!finishFn.includes('Undo.CollapseUndoOperations(group)') || !finishFn.includes('EndMenuOperation'))
+  errors.push('menu cleanup and undo collapse must run even when a setter throws');
+if (!pasteFn.includes('FinishMenuOperation') || !resetFn.includes('FinishMenuOperation'))
+  errors.push('paste and reset must finish the menu scope in finally');
 if (pasteFn.includes('AnimationMode.InAnimationMode()'))
   errors.push('animation mode with no callback still writes the asset and must validate');
 if (!pasteFn.includes('applyPropertyCallback') && !clipCs.includes('applyPropertyCallback'))
