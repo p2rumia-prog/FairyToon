@@ -92,6 +92,9 @@ namespace NW.FairyToon.Editor
         private static GUIStyle s_Box;
         private static GUIStyle s_Outer;
         private static GUIStyle s_Inner;
+        private static GUIStyle s_InnerHalf;
+        private static GUIStyle s_InnerFull;
+        private static GUIStyle s_Custom;
         private static GUIStyle s_Foldout;
         private static GUIStyle s_Gear;
         private static Texture2D s_OuterTex;
@@ -1142,12 +1145,14 @@ namespace NW.FairyToon.Editor
 
             if (!ramp)
             {
+                if (!Searching || Hit("2nd Shadow") || Hit("2nd Color")) Separator();
                 SubHeader("2nd Shadow");
                 TexWideColor("_Shadow2ndColorTex", "_Shadow2ndColor", "2nd Color");
                 P("_Shadow2ndBorder", "Border");
                 P("_Shadow2ndBlur", "Blur");
                 P("_Shadow2ndNormalStrength", "Normal Strength");
                 P("_Shadow2ndReceive", "Receive Shadow");
+                if (!Searching || Hit("3rd Shadow") || Hit("3rd Color")) Separator();
                 SubHeader("3rd Shadow");
                 TexWideColor("_Shadow3rdColorTex", "_Shadow3rdColor", "3rd Color");
                 P("_Shadow3rdBorder", "Border");
@@ -1159,11 +1164,10 @@ namespace NW.FairyToon.Editor
             P("_ShadowMainStrength");
             P("_ShadowEnvStrength");
             P("_ShadowBorderColor");
-            Separator();
             P("_ShadowBorderRange");
-            Separator();
+            if (!Searching || Hit("Blur Mask")) Separator();
             Tex("_ShadowBlurMask", null, "Blur Mask");
-            Separator();
+            if (!Searching || Hit("AO")) Separator();
             P("_BackfaceForceShadow");
 
             string aoKey = PrefsPrefix + "Foldout.ShadowAO";
@@ -1622,8 +1626,8 @@ namespace NW.FairyToon.Editor
             P(n + "BackfaceMask", "sBackfaceMask");
             P(n + "Lod", "sBlur");
             P(n + "BlendMode", "sBlendMode");
-            Separator();
             if (ShowsApplyTransparency()) P(n + "ApplyTransparency", "sApplyTransparency");
+            if (!Searching || LabelOnly("sCustomNormal")) Separator();
             P(n + "CustomNormal", "sCustomNormal");
             if (Prop(n + "CustomNormal") != null && (Number(Prop(n + "CustomNormal")) > 0.5f || Prop(n + "CustomNormal").hasMixedValue))
             {
@@ -1651,7 +1655,6 @@ namespace NW.FairyToon.Editor
             bool directed = Float("_RimDirStrength") > 0f || Prop("_RimDirStrength").hasMixedValue;
             if (directed)
             {
-                Separator();
                 EditorGUI.indentLevel++;
                 P("_RimDirRange");
                 InvBorder("_RimBorder");
@@ -1994,7 +1997,7 @@ namespace NW.FairyToon.Editor
                 m_Props = MaterialEditor.GetMaterialProperties(m_Editor.targets);
             }
             if (m_Frames.Count > 0) m_Frames.RemoveAt(m_Frames.Count - 1);
-            OpenBox(FairyToonL10n.Text("sRendering"), null, PropertyBlock.Rendering);
+            OpenBox(FairyToonL10n.Text("sRendering"), null, PropertyBlock.Rendering, true);
             m_Frames.Add(true);
             P("_Cull");
             DrawZWrite();
@@ -2210,7 +2213,7 @@ namespace NW.FairyToon.Editor
         }
 
         // Outer fill is the measured title-bar colour. The inner fill is the darker content, inset so the outer colour reads as a 2px outline.
-        private bool OpenBox(string shown, MaterialProperty toggle, PropertyBlock? block)
+        private bool OpenBox(string shown, MaterialProperty toggle, PropertyBlock? block, bool full = false)
         {
             EditorGUILayout.Space(2f);
             EditorGUILayout.BeginVertical(s_Outer);
@@ -2239,7 +2242,7 @@ namespace NW.FairyToon.Editor
                 EditorGUILayout.EndVertical();
                 return false;
             }
-            EditorGUILayout.BeginVertical(s_Inner);
+            EditorGUILayout.BeginVertical(full ? s_InnerFull : s_InnerHalf);
             m_InnerDepth++;
             return true;
         }
@@ -2248,7 +2251,7 @@ namespace NW.FairyToon.Editor
         {
             EditorGUILayout.Space(2f);
             EditorGUILayout.BeginVertical(s_Outer);
-            EditorGUILayout.BeginVertical(s_Inner);
+            EditorGUILayout.BeginVertical(s_Custom);
             m_InnerDepth++;
         }
 
@@ -3233,17 +3236,27 @@ namespace NW.FairyToon.Editor
             s_InnerTex = Rounded(content);
             s_Outer = new GUIStyle
             {
-                border = new RectOffset(6, 6, 6, 6),
+                border = new RectOffset(4, 4, 4, 4),
                 margin = new RectOffset(4, 4, 0, 4),
                 padding = new RectOffset(2, 2, 0, 2)
             };
             s_Outer.normal.background = s_OuterTex;
-            s_Inner = new GUIStyle
+            s_InnerHalf = new GUIStyle
+            {
+                border = new RectOffset(4, 4, 4, 4),
+                margin = new RectOffset(2, 2, 2, 2),
+                padding = new RectOffset(2, 2, 2, 2)
+            };
+            s_InnerHalf.normal.background = s_InnerTex;
+            s_InnerFull = new GUIStyle(s_InnerHalf);
+            s_Custom = new GUIStyle
             {
                 border = new RectOffset(6, 6, 6, 6),
-                padding = new RectOffset(6, 4, 4, 4)
+                margin = new RectOffset(4, 4, 4, 4),
+                padding = new RectOffset(4, 4, 4, 4)
             };
-            s_Inner.normal.background = s_InnerTex;
+            s_Custom.normal.background = s_InnerTex;
+            s_Inner = s_InnerHalf;
             s_Box = s_Outer;
             s_Gear = new GUIStyle(GUIStyle.none) { alignment = TextAnchor.MiddleCenter };
         }
