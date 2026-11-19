@@ -1022,34 +1022,22 @@ namespace NW.FairyToon.Editor
             Rect row = EditorGUILayout.GetControlRect();
             BeginScope(row, scope);
             Rect values = EditorGUI.PrefixLabel(row, new GUIContent(FairyToonL10n.Text(label)));
-            float previousLabelWidth = EditorGUIUtility.labelWidth;
-            int previousIndent = EditorGUI.indentLevel;
             bool previousMixed = EditorGUI.showMixedValue;
-            EditorGUIUtility.labelWidth = 14f;
-            EditorGUI.indentLevel = 0;
-            try
+            using (var axes = new AxisFieldScope(values, dimensions))
             {
-                const float gap = 4f;
-                float width = (values.width - gap * (dimensions - 1)) / dimensions;
                 for (int component = 0; component < dimensions; component++)
                 {
                     // Refresh after each write, then edit only this axis across the selected materials.
                     var property = Prop(name);
                     Vector4 value = property.vectorValue;
                     EditorGUI.showMixedValue = DissolveComponentMixed(property, component);
-                    var field = new Rect(values.x + component * (width + gap), values.y, width, values.height);
                     EditorGUI.BeginChangeCheck();
-                    value[component] = EditorGUI.FloatField(field, "XYZ"[component].ToString(), value[component]);
+                    value[component] = EditorGUI.FloatField(axes.Field(component), "XYZ"[component].ToString(), value[component]);
                     if (EditorGUI.EndChangeCheck()) SetDissolveComponents(property, value, 1 << component);
                 }
             }
-            finally
-            {
-                EditorGUIUtility.labelWidth = previousLabelWidth;
-                EditorGUI.indentLevel = previousIndent;
-                EditorGUI.showMixedValue = previousMixed;
-                EndScope();
-            }
+            EditorGUI.showMixedValue = previousMixed;
+            EndScope();
         }
         private static bool DissolveComponentMixed(MaterialProperty property, int component)
         {
@@ -2335,14 +2323,17 @@ namespace NW.FairyToon.Editor
                 Rect label = row;
                 label.width = EditorGUIUtility.labelWidth;
                 EditorGUI.LabelField(label, FairyToonL10n.Text("sScroll"));
-                float field = (row.xMax - label.xMax) * 0.5f;
+                var values = new Rect(label.xMax, row.y, row.xMax - label.xMax, row.height);
                 int mask = 0;
-                EditorGUI.BeginChangeCheck();
-                float scrollX = EditorGUI.FloatField(new Rect(label.xMax, row.y, field - 2f, row.height), "X", value.x);
-                if (EditorGUI.EndChangeCheck()) { value.x = scrollX; mask |= 1; }
-                EditorGUI.BeginChangeCheck();
-                float scrollY = EditorGUI.FloatField(new Rect(label.xMax + field, row.y, field, row.height), "Y", value.y);
-                if (EditorGUI.EndChangeCheck()) { value.y = scrollY; mask |= 2; }
+                using (var axes = new AxisFieldScope(values, 2))
+                {
+                    EditorGUI.BeginChangeCheck();
+                    float scrollX = EditorGUI.FloatField(axes.Field(0), "X", value.x);
+                    if (EditorGUI.EndChangeCheck()) { value.x = scrollX; mask |= 1; }
+                    EditorGUI.BeginChangeCheck();
+                    float scrollY = EditorGUI.FloatField(axes.Field(1), "Y", value.y);
+                    if (EditorGUI.EndChangeCheck()) { value.y = scrollY; mask |= 2; }
+                }
                 if (mask != 0) SetDissolveComponents(property, value, mask);
                 EditorGUI.showMixedValue = false;
                 EndScope();
@@ -2412,15 +2403,18 @@ namespace NW.FairyToon.Editor
             Rect label = dirRow;
             label.width = EditorGUIUtility.labelWidth;
             EditorGUI.LabelField(label, FairyToonL10n.Text("sVectorTex"));
-            float field = (dirRow.xMax - label.xMax) / 3f;
+            var values = new Rect(label.xMax, dirRow.y, dirRow.xMax - label.xMax, dirRow.height);
             int mask = 0;
-            for (int axis = 0; axis < 3; axis++)
+            using (var axes = new AxisFieldScope(values, 3))
             {
-                EditorGUI.BeginChangeCheck();
-                float next = EditorGUI.FloatField(new Rect(label.xMax + axis * field, dirRow.y, field - 2f, dirRow.height), "XYZ"[axis].ToString(), value[axis]);
-                if (!EditorGUI.EndChangeCheck()) continue;
-                value[axis] = next;
-                mask |= 1 << axis;
+                for (int axis = 0; axis < 3; axis++)
+                {
+                    EditorGUI.BeginChangeCheck();
+                    float next = EditorGUI.FloatField(axes.Field(axis), "XYZ"[axis].ToString(), value[axis]);
+                    if (!EditorGUI.EndChangeCheck()) continue;
+                    value[axis] = next;
+                    mask |= 1 << axis;
+                }
             }
             if (mask != 0) SetDissolveComponents(property, value, mask);
             EditorGUI.showMixedValue = false;
@@ -3125,6 +3119,38 @@ namespace NW.FairyToon.Editor
             return index >= 0 && System.Array.IndexOf(material.shader.GetPropertyAttributes(index), attribute) >= 0;
         }
 
+        // Vector2Field gives every axis the width of the letter W, a 4-point gap, and no extra indent.
+        private readonly struct AxisFieldScope : IDisposable
+        {
+            private readonly float m_LabelWidth;
+            private readonly int m_Indent;
+            private readonly Rect m_Values;
+            private readonly float m_Width;
+
+            public AxisFieldScope(Rect values, int count)
+            {
+                m_LabelWidth = EditorGUIUtility.labelWidth;
+                m_Indent = EditorGUI.indentLevel;
+                EditorGUIUtility.labelWidth = EditorStyles.label.CalcSize(new GUIContent("W")).x;
+                EditorGUI.indentLevel = 0;
+                m_Values = values;
+                const float gap = 4f;
+                m_Width = count <= 1 ? values.width : (values.width - gap * (count - 1)) / count;
+            }
+
+            public Rect Field(int index)
+            {
+                const float gap = 4f;
+                return new Rect(m_Values.x + index * (m_Width + gap), m_Values.y, m_Width, m_Values.height);
+            }
+
+            public void Dispose()
+            {
+                EditorGUIUtility.labelWidth = m_LabelWidth;
+                EditorGUI.indentLevel = m_Indent;
+            }
+        }
+
         private void ScaleOffset(string texture)
         {
             var tex = Prop(texture);
@@ -3151,16 +3177,21 @@ namespace NW.FairyToon.Editor
             Rect label = row;
             label.width = EditorGUIUtility.labelWidth;
             EditorGUI.LabelField(label, FairyToonL10n.Text(scaleRow ? "ft.Tiling" : "ft.Offset"));
-            float field = (row.xMax - label.xMax) * 0.5f;
-            Rect xRect = new Rect(label.xMax, row.y, field - 2f, row.height);
-            Rect yRect = new Rect(label.xMax + field, row.y, field, row.height);
+            var values = new Rect(label.xMax, row.y, row.xMax - label.xMax, row.height);
             EditorGUI.showMixedValue = mixed;
-            EditorGUI.BeginChangeCheck();
-            float editedX = EditorGUI.FloatField(xRect, "X", shownX);
-            bool changeX = EditorGUI.EndChangeCheck();
-            EditorGUI.BeginChangeCheck();
-            float editedY = EditorGUI.FloatField(yRect, "Y", shownY);
-            bool changeY = EditorGUI.EndChangeCheck();
+            float editedX;
+            float editedY;
+            bool changeX;
+            bool changeY;
+            using (var axes = new AxisFieldScope(values, 2))
+            {
+                EditorGUI.BeginChangeCheck();
+                editedX = EditorGUI.FloatField(axes.Field(0), "X", shownX);
+                changeX = EditorGUI.EndChangeCheck();
+                EditorGUI.BeginChangeCheck();
+                editedY = EditorGUI.FloatField(axes.Field(1), "Y", shownY);
+                changeY = EditorGUI.EndChangeCheck();
+            }
             if (changeX || changeY)
             {
                 Vector4 current = tex.textureScaleAndOffset;
