@@ -163,6 +163,24 @@ namespace NW.FairyToon.Editor.Tests
         }
 
         [Test]
+        public void EnablingMatCapSetsTheKeyword()
+        {
+            Material material = NewMaterial();
+            material.SetFloat("_UseMatCap", 1f);
+            FairyToonMaterialSetup.Apply(material);
+            Assert.IsTrue(material.IsKeywordEnabled("_FT_MATCAP"));
+        }
+
+        [Test]
+        public void GemShaderReportsGemMode()
+        {
+            Shader shader = Shader.Find(FairyToonMaterialSetup.GemShaderName);
+            Assert.IsNotNull(shader, "FairyToon/Gem must be imported.");
+            Material material = Track(new Material(shader));
+            Assert.AreEqual(FairyToonMaterialSetup.Gem, FairyToonMaterialSetup.GetRenderingMode(material));
+        }
+
+        [Test]
         public void LegacyShaderLabIntIsFloatBacked()
         {
             Shader shader = Shader.Find(FairyToon.ShaderName);

@@ -89,7 +89,7 @@ namespace NW.FairyToon.Editor
             int index = FollowsEditor ? 0 : Array.IndexOf(LanguageCodes, Language) + 1;
             if (index < 0) index = 0;
             EditorGUI.BeginChangeCheck();
-            int next = EditorGUILayout.Popup(Text("Language"), index, names);
+            int next = EditorGUILayout.Popup("Language", index, names);
             if (!EditorGUI.EndChangeCheck() || next == index) return;
             if (next <= 0)
             {
