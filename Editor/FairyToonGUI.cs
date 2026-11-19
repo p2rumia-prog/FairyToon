@@ -2208,7 +2208,7 @@ namespace NW.FairyToon.Editor
             Rect gear = new Rect(row.xMax - 22f, row.y, 20f, row.height);
             row.width = Mathf.Max(0f, row.width - 24f);
             string shown = FairyToonL10n.Text(label);
-            if (!DrawLocalizedEnum(prop, shown, null, row))
+            if (!DrawLocalizedEnum(prop, shown, null, row, true))
                 m_Editor.ShaderProperty(row, prop, shown);
             if (GUI.Button(gear, EditorGUIUtility.IconContent("_Popup"), s_Gear))
                 FairyToonClipboard.ShowMenu(block, m_Editor, () => m_Props);
@@ -3019,7 +3019,7 @@ namespace NW.FairyToon.Editor
             string shown = label != null ? FairyToonL10n.Text(label) : FairyToonL10n.Property(name, prop.displayName);
             if (!RowVisible(name, shown, tooltip)) return;
             string tip = string.IsNullOrEmpty(tooltip) ? null : FairyToonL10n.Text(tooltip);
-            if (DrawLocalizedEnum(prop, shown, tip)) return;
+            if (DrawLocalizedEnum(prop, shown, tip, default, false)) return;
             if (prop.propertyType == ShaderPropertyType.Color)
             {
                 if (IsGammaHdr(name) || IsBuiltinHdr(name))
@@ -3049,7 +3049,7 @@ namespace NW.FairyToon.Editor
         }
 
         /// <summary>Enum popups use the catalog for each option, the same way lilToon builds sAlphaMaskModes.</summary>
-        private bool DrawLocalizedEnum(MaterialProperty prop, string shown, string tip, Rect rect = default)
+        private bool DrawLocalizedEnum(MaterialProperty prop, string shown, string tip, Rect rect, bool supplied)
         {
             if (m_Editor.target is not Material material || material.shader == null) return false;
             int index = material.shader.FindPropertyIndex(prop.name);
@@ -3071,18 +3071,25 @@ namespace NW.FairyToon.Editor
             int selected = -1;
             for (int i = 0; i < values.Length; i++) if (values[i] == current) selected = i;
             var content = new GUIContent(shown, tip);
-            if (rect.width <= 0f || rect.height <= 0f) rect = EditorGUILayout.GetControlRect();
+            // A layout rect is a 1px placeholder, so its size must not decide whether another row is reserved.
+            if (!supplied) rect = EditorGUILayout.GetControlRect();
             BeginScope(rect, prop);
-            EditorGUI.showMixedValue = prop.hasMixedValue;
-            EditorGUI.BeginChangeCheck();
-            var options = new GUIContent[labels.Length];
-            for (int i = 0; i < labels.Length; i++) options[i] = new GUIContent(labels[i]);
-            // Popup(Rect, GUIContent, int, string[]) is internal in Unity 6000.6. The GUIContent[] overload is public.
-            int next = EditorGUI.Popup(rect, content, prop.hasMixedValue ? -1 : selected, options);
-            bool changed = EditorGUI.EndChangeCheck();
-            EditorGUI.showMixedValue = false;
-            if (changed && next >= 0 && next < values.Length) SetNumber(prop, values[next]);
-            EndScope();
+            try
+            {
+                EditorGUI.showMixedValue = prop.hasMixedValue;
+                EditorGUI.BeginChangeCheck();
+                var options = new GUIContent[labels.Length];
+                for (int i = 0; i < labels.Length; i++) options[i] = new GUIContent(labels[i]);
+                // Popup(Rect, GUIContent, int, string[]) is internal in Unity 6000.6. The GUIContent[] overload is public.
+                int next = EditorGUI.Popup(rect, content, prop.hasMixedValue ? -1 : selected, options);
+                bool changed = EditorGUI.EndChangeCheck();
+                if (changed && next >= 0 && next < values.Length) SetNumber(prop, values[next]);
+            }
+            finally
+            {
+                EditorGUI.showMixedValue = false;
+                EndScope();
+            }
             return true;
         }
 
