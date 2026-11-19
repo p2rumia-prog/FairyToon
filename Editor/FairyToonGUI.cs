@@ -2287,16 +2287,18 @@ namespace NW.FairyToon.Editor
                 Rect row = EditorGUILayout.GetControlRect();
                 BeginScope(row, property);
                 EditorGUI.showMixedValue = property.hasMixedValue;
+                Rect label = row;
+                label.width = EditorGUIUtility.labelWidth;
+                EditorGUI.LabelField(label, FairyToonL10n.Text("sScroll"));
+                float field = (row.xMax - label.xMax) * 0.5f;
+                int mask = 0;
                 EditorGUI.BeginChangeCheck();
-                Vector2 before = new Vector2(value.x, value.y);
-                Vector2 scroll = EditorGUI.Vector2Field(row, FairyToonL10n.Text("sScroll"), before);
-                if (EditorGUI.EndChangeCheck())
-                {
-                    int mask = 0;
-                if (property.hasMixedValue || !Mathf.Approximately(scroll.x, before.x)) { value.x = scroll.x; mask |= 1; }
-                if (property.hasMixedValue || !Mathf.Approximately(scroll.y, before.y)) { value.y = scroll.y; mask |= 2; }
-                    if (mask != 0) SetDissolveComponents(property, value, mask);
-                }
+                float scrollX = EditorGUI.FloatField(new Rect(label.xMax, row.y, field - 2f, row.height), value.x);
+                if (EditorGUI.EndChangeCheck()) { value.x = scrollX; mask |= 1; }
+                EditorGUI.BeginChangeCheck();
+                float scrollY = EditorGUI.FloatField(new Rect(label.xMax + field, row.y, field, row.height), value.y);
+                if (EditorGUI.EndChangeCheck()) { value.y = scrollY; mask |= 2; }
+                if (mask != 0) SetDissolveComponents(property, value, mask);
                 EditorGUI.showMixedValue = false;
                 EndScope();
             }
@@ -2357,17 +2359,20 @@ namespace NW.FairyToon.Editor
             Rect row = EditorGUILayout.GetControlRect();
             BeginScope(row, property);
             EditorGUI.showMixedValue = property.hasMixedValue;
-            EditorGUI.BeginChangeCheck();
-            Vector3 before = new Vector3(value.x, value.y, value.z);
-            Vector3 direction = EditorGUI.Vector3Field(row, FairyToonL10n.Text("sVectorTex"), before);
-            if (EditorGUI.EndChangeCheck())
+            Rect label = row;
+            label.width = EditorGUIUtility.labelWidth;
+            EditorGUI.LabelField(label, FairyToonL10n.Text("sVectorTex"));
+            float field = (row.xMax - label.xMax) / 3f;
+            int mask = 0;
+            for (int axis = 0; axis < 3; axis++)
             {
-                int mask = 0;
-                if (property.hasMixedValue || !Mathf.Approximately(direction.x, before.x)) { value.x = direction.x; mask |= 1; }
-                if (property.hasMixedValue || !Mathf.Approximately(direction.y, before.y)) { value.y = direction.y; mask |= 2; }
-                if (property.hasMixedValue || !Mathf.Approximately(direction.z, before.z)) { value.z = direction.z; mask |= 4; }
-                if (mask != 0) SetDissolveComponents(property, value, mask);
+                EditorGUI.BeginChangeCheck();
+                float next = EditorGUI.FloatField(new Rect(label.xMax + axis * field, row.y, field - 2f, row.height), value[axis]);
+                if (!EditorGUI.EndChangeCheck()) continue;
+                value[axis] = next;
+                mask |= 1 << axis;
             }
+            if (mask != 0) SetDissolveComponents(property, value, mask);
             EditorGUI.showMixedValue = false;
             EndScope();
             row = EditorGUILayout.GetControlRect();
@@ -2446,7 +2451,8 @@ namespace NW.FairyToon.Editor
             bool changeScaleY = DecalSlider(tex, tex.name + "_ST.y", "sScaleY", scaleY, -1f, 1f, ref nextScaleY);
             if (!changeX && !changeY && !changeScaleX && !changeScaleY) return;
             Vector4 proposed = DecalVector(st, copyMode, changeX, changeY, changeScaleX, changeScaleY, nextX, nextY, nextScaleX, nextScaleY);
-            int editedMask = (changeScaleX ? 1 : 0) | (changeScaleY ? 2 : 0) | (changeX || changeScaleX ? 4 : 0) | (changeY || changeScaleY ? 8 : 0);
+            // Unity bit 0 is the texture reference. Scale X/Y are bits 1 and 2. Offset X/Y are bits 3 and 4.
+            int editedMask = (changeScaleX ? 2 : 0) | (changeScaleY ? 4 : 0) | (changeX || changeScaleX ? 8 : 0) | (changeY || changeScaleY ? 16 : 0);
             if (OfferTextureScale(tex, proposed, editedMask)) return;
             if (tex.targets == null) return;
             Undo.IncrementCurrentGroup();
@@ -3011,26 +3017,38 @@ namespace NW.FairyToon.Editor
         {
             Rect row = EditorGUILayout.GetControlRect();
             BeginScope(row, tex);
-            EditorGUI.showMixedValue = TextureAxesDiffer(tex, scaleRow);
+            bool mixed = TextureAxesDiffer(tex, scaleRow);
+            float shownX = scaleRow ? st.x : st.z;
+            float shownY = scaleRow ? st.y : st.w;
+            Rect label = row;
+            label.width = EditorGUIUtility.labelWidth;
+            EditorGUI.LabelField(label, FairyToonL10n.Text(scaleRow ? "ft.Tiling" : "ft.Offset"));
+            float field = (row.xMax - label.xMax) * 0.5f;
+            Rect xRect = new Rect(label.xMax, row.y, field - 2f, row.height);
+            Rect yRect = new Rect(label.xMax + field, row.y, field, row.height);
+            EditorGUI.showMixedValue = mixed;
             EditorGUI.BeginChangeCheck();
-            Vector2 edited = EditorGUI.Vector2Field(row, new GUIContent(FairyToonL10n.Text(scaleRow ? "ft.Tiling" : "ft.Offset")),
-                scaleRow ? new Vector2(st.x, st.y) : new Vector2(st.z, st.w));
-            if (EditorGUI.EndChangeCheck())
+            float editedX = EditorGUI.FloatField(xRect, shownX);
+            bool changeX = EditorGUI.EndChangeCheck();
+            EditorGUI.BeginChangeCheck();
+            float editedY = EditorGUI.FloatField(yRect, shownY);
+            bool changeY = EditorGUI.EndChangeCheck();
+            if (changeX || changeY)
             {
                 Vector4 current = tex.textureScaleAndOffset;
                 Vector4 next = current;
                 int mask = 0;
-                bool mixed = TextureAxesDiffer(tex, scaleRow);
                 if (scaleRow)
                 {
-                    if (mixed || !Mathf.Approximately(edited.x, current.x)) { next.x = edited.x; mask |= 1; }
-                    if (mixed || !Mathf.Approximately(edited.y, current.y)) { next.y = edited.y; mask |= 2; }
+                    if (changeX) { next.x = editedX; mask |= 2; }
+                    if (changeY) { next.y = editedY; mask |= 4; }
                 }
                 else
                 {
-                    if (mixed || !Mathf.Approximately(edited.x, current.z)) { next.z = edited.x; mask |= 4; }
-                    if (mixed || !Mathf.Approximately(edited.y, current.w)) { next.w = edited.y; mask |= 8; }
+                    if (changeX) { next.z = editedX; mask |= 8; }
+                    if (changeY) { next.w = editedY; mask |= 16; }
                 }
+                Vector2 edited = new Vector2(editedX, editedY);
                 if (mask != 0 && !OfferTextureScale(tex, next, mask) && tex.targets != null)
                 {
                 Undo.IncrementCurrentGroup();
@@ -3043,10 +3061,10 @@ namespace NW.FairyToon.Editor
                         if (material == null || !material.HasProperty(tex.name) || Locked(material, tex.name + "_ST")) continue;
                         Vector4 stored = material.GetVector(tex.name + "_ST");
                         Vector4 merged = stored;
-                        if ((mask & 1) != 0) merged.x = edited.x;
-                        if ((mask & 2) != 0) merged.y = edited.y;
-                        if ((mask & 4) != 0) merged.z = edited.x;
-                        if ((mask & 8) != 0) merged.w = edited.y;
+                        if ((mask & 2) != 0) merged.x = edited.x;
+                        if ((mask & 4) != 0) merged.y = edited.y;
+                        if ((mask & 8) != 0) merged.z = edited.x;
+                        if ((mask & 16) != 0) merged.w = edited.y;
                         if (merged == stored) continue;
                         Undo.RecordObject(material, "Modify UV");
                         material.SetVector(tex.name + "_ST", merged);
