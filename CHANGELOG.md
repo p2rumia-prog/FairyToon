@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.2.2
+
+- Main Color 2nd/3rd Reset UV matches the ten writes in lilToon 2.4.1. Texture tiling, offset and Scroll/Rotate survive the reset. Animation preview callbacks and grouped Undo still apply.
+
 ## 0.2.1
 
 - Transparent hair converted to Cutout moves out of the transparent queue. Reset UV on Main 2nd/3rd respects animation preview and groups asset edits into one Undo. The first TwoPass Fur shell starts with depth writes and alpha to coverage enabled.

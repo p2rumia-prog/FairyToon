@@ -377,7 +377,10 @@ namespace NW.FairyToon.Editor
             for (int i = 0; i < shader.GetPropertyCount(); i++)
             {
                 string property = shader.GetPropertyName(i);
-                if (!visited.Add(property) || fairyToon.FindPropertyIndex(property) >= 0) continue;
+                if (!visited.Add(property)) continue;
+                bool storedDecalVector = property == "_Main2ndTexDecalAnimation" || property == "_Main2ndTexDecalSubParam"
+                    || property == "_Main3rdTexDecalAnimation" || property == "_Main3rdTexDecalSubParam";
+                if (!storedDecalVector && fairyToon.FindPropertyIndex(property) >= 0) continue;
                 var type = shader.GetPropertyType(i);
                 if (property.StartsWith("_Use", StringComparison.Ordinal) && IsNumber(type) && Number(source, i) > 0.5f)
                 {
@@ -407,7 +410,9 @@ namespace NW.FairyToon.Editor
                         value = string.IsNullOrEmpty(path) ? texture.name : path;
                     }
                 }
-                if (value != null) report.DroppedValues.Add(property + " = " + value);
+                if (value == null) continue;
+                if (storedDecalVector) Add(report.UnsupportedFeatures, property + " is retained. Decal atlas playback is unsupported.");
+                else report.DroppedValues.Add(property + " = " + value);
             }
             foreach (string prefix in new[] { "_Dissolve", "_Main2ndDissolve", "_Main3rdDissolve" })
             {
