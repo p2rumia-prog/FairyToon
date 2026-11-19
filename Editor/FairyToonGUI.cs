@@ -202,7 +202,13 @@ namespace NW.FairyToon.Editor
             // A kept callback skips Apply, but the inspector's follow-up pass still has to count this material
             // exactly once. Returning before the count left the skip for a later, unrelated validation.
             bool pending = s_PendingSkip.Remove(material);
-            if (s_InspectorPass || s_MenuOperation)
+            if (s_MenuOperation)
+            {
+                if (pending) return;
+                s_DirectTargets.Add(material);
+                return;
+            }
+            if (s_InspectorPass)
             {
                 if (pending) return;
                 s_DirectTargets.Add(material);
@@ -1084,20 +1090,23 @@ namespace NW.FairyToon.Editor
             Undo.IncrementCurrentGroup();
             int group = Undo.GetCurrentGroup();
             Undo.SetCurrentGroupName("Modify " + property.displayName);
-            foreach (Object target in property.targets)
+            try
             {
-                var material = target as Material;
-                if (material == null || !material.HasProperty(property.name)) continue;
-                Vector4 current = material.GetVector(property.name);
-                Vector4 next = current;
-                for (int component = 0; component < 4; component++)
-                    if ((components & (1 << component)) != 0) next[component] = value[component];
-                if (next == current) continue;
-                Undo.RecordObject(material, "Modify " + property.displayName);
-                material.SetVector(property.name, next);
-                FairyToonMaterialSetup.Apply(material);
+                foreach (Object target in property.targets)
+                {
+                    var material = target as Material;
+                    if (material == null || !material.HasProperty(property.name)) continue;
+                    Vector4 current = material.GetVector(property.name);
+                    Vector4 next = current;
+                    for (int component = 0; component < 4; component++)
+                        if ((components & (1 << component)) != 0) next[component] = value[component];
+                    if (next == current) continue;
+                    Undo.RecordObject(material, "Modify " + property.displayName);
+                    material.SetVector(property.name, next);
+                    FairyToonMaterialSetup.Apply(material);
+                }
             }
-            Undo.CollapseUndoOperations(group);
+            finally { Undo.CollapseUndoOperations(group); }
         }
 
         private void Shadow()
