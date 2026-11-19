@@ -3277,14 +3277,19 @@ namespace NW.FairyToon.Editor
             }
             s_HeaderLabel = new GUIStyle(EditorStyles.label) { alignment = TextAnchor.MiddleLeft, fontStyle = FontStyle.Normal };
             s_HeaderLabel.normal.textColor = s_Foldout.normal.textColor;
-            // Section boxes use lilToon's 12px GUI textures and InitializeBox metrics. The header gap stays Space(2).
+            // Section boxes use lilToon's 12px GUI textures. The header gap is the outer top margin.
             s_Line = s_ProSkin ? new Color(0.35f, 0.35f, 0.35f, 1f) : new Color(0.4f, 0.4f, 0.4f, 1f);
             string skin = s_ProSkin ? "dark" : "light";
             s_Outer = BoxStyle(4, 4, 2, GuiBox("gui_box_outer_" + skin));
             // 2 points is 3 px at 150%, the measured gap from the section header to the box.
             s_Outer.margin = new RectOffset(4, 4, 2, 4);
+            // Vertical padding and the inner top margin are the same colour as the title, so they
+            // made the bar 39 px. The 22-point title row is the whole bar, 33 px at 150%.
+            s_Outer.padding = new RectOffset(2, 2, 0, 0);
             s_InnerHalf = BoxStyle(4, 2, 2, GuiBox("gui_box_inner_half_" + skin));
+            s_InnerHalf.margin = new RectOffset(2, 2, 0, 2);
             s_InnerFull = BoxStyle(4, 2, 2, GuiBox("gui_box_inner_" + skin));
+            s_InnerFull.margin = new RectOffset(2, 2, 0, 2);
             s_Custom = BoxStyle(6, 4, 4, GuiBox("gui_custom_box_" + skin));
             s_Inner = s_InnerHalf;
             s_Box = s_Outer;
