@@ -3373,19 +3373,37 @@ namespace NW.FairyToon.Editor
             return style;
         }
 
+        private static readonly Dictionary<string, Texture2D> s_FallbackBoxes = new Dictionary<string, Texture2D>();
+
         private static Texture2D GuiBox(string name)
         {
-            string[] guids = AssetDatabase.FindAssets(name + " t:Texture2D");
-            for (int i = 0; i < guids.Length; i++)
+            const string path = "Packages/com.nw.fairytoon/Editor/Resources/";
+            var texture = AssetDatabase.LoadAssetAtPath<Texture2D>(path + name + ".png");
+            return texture != null ? texture : FallbackBox(name);
+        }
+
+        private static Texture2D FallbackBox(string name)
+        {
+            if (s_FallbackBoxes.TryGetValue(name, out Texture2D cached) && cached != null) return cached;
+            bool light = name.EndsWith("light", StringComparison.Ordinal);
+            bool custom = name.StartsWith("gui_custom", StringComparison.Ordinal);
+            bool outer = name.StartsWith("gui_box_outer", StringComparison.Ordinal);
+            Color32 fill = custom
+                ? (light ? new Color32(222, 222, 222, 255) : new Color32(64, 64, 64, 255))
+                : outer
+                    ? (light ? new Color32(255, 255, 255, 255) : new Color32(89, 89, 89, 255))
+                    : (light ? new Color32(222, 222, 222, 255) : new Color32(56, 56, 56, 255));
+            var texture = new Texture2D(12, 12, TextureFormat.RGBA32, false)
             {
-                string path = AssetDatabase.GUIDToAssetPath(guids[i]);
-                if (path == null || !path.EndsWith("/" + name + ".png", StringComparison.Ordinal)) continue;
-                if (path.IndexOf("FairyToon", StringComparison.OrdinalIgnoreCase) < 0
-                    && path.IndexOf("fairytoon", StringComparison.OrdinalIgnoreCase) < 0) continue;
-                var texture = AssetDatabase.LoadAssetAtPath<Texture2D>(path);
-                if (texture != null) return texture;
-            }
-            return null;
+                hideFlags = HideFlags.HideAndDontSave,
+                wrapMode = TextureWrapMode.Clamp
+            };
+            var pixels = new Color32[144];
+            for (int i = 0; i < pixels.Length; i++) pixels[i] = fill;
+            texture.SetPixels32(pixels);
+            texture.Apply();
+            s_FallbackBoxes[name] = texture;
+            return texture;
         }
 
     }

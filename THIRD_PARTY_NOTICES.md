@@ -19,7 +19,9 @@ Adapted in this package:
 
 `Editor/Resources/gui_box_*.png` and `gui_custom_box_*.png` are the lilToon 2.4.1 GUI textures, copied under the MIT license above. The inspector uses them with the same `InitializeBox` border, margin and padding as `lilEditorGUI`. The untitled Base box uses `gui_custom_box`.
 
-The license text below is the `LICENSE` file at that commit.
+The package that ships the GUI textures uses this copyright line: `Copyright (c) 2020-present lilxyzw`.
+
+The license text below is the root `LICENSE` file at that commit.
 
 ```
 MIT License
