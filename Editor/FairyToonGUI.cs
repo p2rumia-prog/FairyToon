@@ -51,32 +51,110 @@ namespace NW.FairyToon.Editor
         private MaterialEditor m_Editor;
         private MaterialProperty[] m_Props;
 
-        // Set by a wrapped applyPropertyCallback when that callback returns true (it kept the write).
-        // Unity still calls ValidateMaterial afterwards, and MaterialEditor calls it again after OnGUI.
-        private static bool s_CallbackConsumedWrite;
-        private static bool s_DirectAssetWrite;
-        private static bool s_SkipAssetValidation;
-
-        internal static bool WroteAsset => s_DirectAssetWrite;
-
-        internal static void NoteCallbackResult(bool handled)
+        // One property write validates every target, then MaterialEditor validates again after OnGUI.
+        // The result is recorded per material so the first target cannot consume the skip for the rest,
+        // and a later inspector cannot inherit it. Search and foldouts do not count as writes.
+        private struct NativeState
         {
-            if (handled) s_CallbackConsumedWrite = true;
-            else s_DirectAssetWrite = true;
+            public int RawQueue;
+            public bool Instancing;
+            public bool DoubleSidedGI;
+        }
+
+        private static readonly HashSet<int> s_ConsumedTargets = new HashSet<int>();
+        private static readonly HashSet<int> s_DirectTargets = new HashSet<int>();
+        private static readonly HashSet<int> s_NativeChanged = new HashSet<int>();
+        private static readonly Dictionary<int, NativeState> s_NativeBefore = new Dictionary<int, NativeState>();
+        private static bool s_InspectorPass;
+        private static int s_PostPassesLeft;
+
+        internal static bool WroteAsset => s_DirectTargets.Count > 0;
+
+        internal static void NoteCallbackResult(MaterialProperty property, bool handled)
+        {
+            if (property == null || property.targets == null) return;
+            for (int i = 0; i < property.targets.Length; i++)
+            {
+                Object target = property.targets[i];
+                if (target == null) continue;
+                int id = target.GetInstanceID();
+                if (handled) s_ConsumedTargets.Add(id);
+                else s_DirectTargets.Add(id);
+            }
+        }
+
+        private static void ClearValidationScope()
+        {
+            s_ConsumedTargets.Clear();
+            s_DirectTargets.Clear();
+            s_NativeChanged.Clear();
+            s_NativeBefore.Clear();
+            s_InspectorPass = false;
+            s_PostPassesLeft = 0;
+        }
+
+        private void CaptureNativeState()
+        {
+            s_NativeBefore.Clear();
+            foreach (Object target in m_Editor.targets)
+            {
+                var material = target as Material;
+                if (material == null) continue;
+                s_NativeBefore[material.GetInstanceID()] = new NativeState
+                {
+                    RawQueue = material.rawRenderQueue,
+                    Instancing = material.enableInstancing,
+                    DoubleSidedGI = material.doubleSidedGI
+                };
+            }
+        }
+
+        private void NoteNativeChanges()
+        {
+            foreach (Object target in m_Editor.targets)
+            {
+                var material = target as Material;
+                if (material == null || !s_NativeBefore.TryGetValue(material.GetInstanceID(), out NativeState before)) continue;
+                if (before.RawQueue != material.rawRenderQueue
+                    || before.Instancing != material.enableInstancing
+                    || before.DoubleSidedGI != material.doubleSidedGI)
+                    s_NativeChanged.Add(material.GetInstanceID());
+            }
+        }
+
+        private static int MaterialCount(MaterialEditor editor)
+        {
+            int count = 0;
+            foreach (Object target in editor.targets)
+                if (target is Material) count++;
+            return count;
         }
 
         public override void ValidateMaterial(Material material)
         {
-            // ApplyProperty calls this even when the callback already stored the edit.
-            // A missing callback, or one that returns false, wrote the asset and must refresh keywords.
-            if (s_CallbackConsumedWrite)
+            if (material == null) return;
+            int id = material.GetInstanceID();
+            bool consumedOnly = s_ConsumedTargets.Contains(id) && !s_DirectTargets.Contains(id);
+            if (s_InspectorPass)
             {
-                s_CallbackConsumedWrite = false;
+                // The callback kept this target's write. Every target of that write is listed, so the
+                // second material is not sent through Apply.
+                if (consumedOnly) return;
+                s_DirectTargets.Add(id);
+                FairyToonMaterialSetup.Apply(material);
                 return;
             }
-            if (s_SkipAssetValidation && !s_DirectAssetWrite) return;
-            s_DirectAssetWrite = true;
-            s_SkipAssetValidation = false;
+            if (s_PostPassesLeft > 0)
+            {
+                s_PostPassesLeft--;
+                bool finish = s_PostPassesLeft == 0;
+                // A search keystroke changes the GUI without writing a material. Apply only a target
+                // whose property write hit the asset, or whose queue / instancing / GI field changed.
+                if (s_NativeChanged.Contains(id) || (s_DirectTargets.Contains(id) && !consumedOnly))
+                    FairyToonMaterialSetup.Apply(material);
+                if (finish) ClearValidationScope();
+                return;
+            }
             FairyToonMaterialSetup.Apply(material);
         }
 
@@ -92,10 +170,9 @@ namespace NW.FairyToon.Editor
             m_Props = properties;
             DrawVersionFoldout();
             DrawHelpFoldout();
-            s_CallbackConsumedWrite = false;
-            s_DirectAssetWrite = false;
-            s_HadConsumed = false;
-            s_SkipAssetValidation = false;
+            ClearValidationScope();
+            s_InspectorPass = true;
+            CaptureNativeState();
             var wrapped = new List<SavedCallback>();
             if (properties != null)
                 for (int i = 0; i < properties.Length; i++)
@@ -125,9 +202,12 @@ namespace NW.FairyToon.Editor
             finally
             {
                 RestoreCallbacks(wrapped);
-                // MaterialEditor.OnInspectorGUI calls ValidateMaterial after OnGUI returns.
-                // Skip that pass only when a callback kept every write. A false return wrote the asset.
-                s_SkipAssetValidation = s_HadConsumed && !s_DirectAssetWrite;
+                s_InspectorPass = false;
+                NoteNativeChanges();
+                // MaterialEditor validates each material after OnGUI only when something in the GUI changed.
+                // Leave the per-material result up for that pass, then drop it so it cannot block a later call.
+                if (GUI.changed) s_PostPassesLeft = MaterialCount(materialEditor);
+                else ClearValidationScope();
             }
         }
 
@@ -137,8 +217,6 @@ namespace NW.FairyToon.Editor
             public MaterialProperty.ApplyPropertyCallback Original;
         }
 
-        private static bool s_HadConsumed;
-
         private static void WrapCallback(MaterialProperty property, List<SavedCallback> wrapped)
         {
             if (property == null || property.applyPropertyCallback == null) return;
@@ -147,8 +225,7 @@ namespace NW.FairyToon.Editor
             property.applyPropertyCallback = (changed, mask, previous) =>
             {
                 bool handled = original(changed, mask, previous);
-                NoteCallbackResult(handled);
-                if (handled) s_HadConsumed = true;
+                NoteCallbackResult(changed, handled);
                 return handled;
             };
         }
@@ -230,8 +307,16 @@ namespace NW.FairyToon.Editor
                 SeeThrough();
             Stencil();
             Rendering();
-            if (EditorGUI.EndChangeCheck() && !(s_HadConsumed && !s_DirectAssetWrite))
-            foreach (Object target in m_Editor.targets) FairyToonMaterialSetup.Apply(target as Material);
+            if (EditorGUI.EndChangeCheck())
+            {
+                NoteNativeChanges();
+                foreach (Object target in m_Editor.targets)
+                {
+                    var material = target as Material;
+                    if (material != null && s_NativeChanged.Contains(material.GetInstanceID()))
+                        FairyToonMaterialSetup.Apply(material);
+                }
+            }
         }
 
         private void Group(string key)
