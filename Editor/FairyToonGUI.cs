@@ -1,6 +1,5 @@
 using System;
 using System.Collections.Generic;
-using System.Reflection;
 using UnityEditor;
 using UnityEngine;
 using UnityEngine.Rendering;
@@ -62,10 +61,11 @@ namespace NW.FairyToon.Editor
             public bool DoubleSidedGI;
         }
 
-        private static readonly HashSet<int> s_ConsumedTargets = new HashSet<int>();
-        private static readonly HashSet<int> s_DirectTargets = new HashSet<int>();
-        private static readonly HashSet<int> s_NativeChanged = new HashSet<int>();
-        private static readonly Dictionary<int, NativeState> s_NativeBefore = new Dictionary<int, NativeState>();
+        // Keyed by the material reference. Unity 6000.6 makes Object.GetInstanceID a hard error.
+        private static readonly HashSet<Object> s_ConsumedTargets = new HashSet<Object>();
+        private static readonly HashSet<Object> s_DirectTargets = new HashSet<Object>();
+        private static readonly HashSet<Object> s_NativeChanged = new HashSet<Object>();
+        private static readonly Dictionary<Object, NativeState> s_NativeBefore = new Dictionary<Object, NativeState>();
         private static bool s_InspectorPass;
         private static bool s_MenuOperation;
         private static int s_PostPassesLeft;
@@ -79,9 +79,8 @@ namespace NW.FairyToon.Editor
             {
                 Object target = property.targets[i];
                 if (target == null) continue;
-                int id = target.GetInstanceID();
-                if (handled) s_ConsumedTargets.Add(id);
-                else s_DirectTargets.Add(id);
+                if (handled) s_ConsumedTargets.Add(target);
+                else s_DirectTargets.Add(target);
             }
         }
 
@@ -102,7 +101,7 @@ namespace NW.FairyToon.Editor
             {
                 var material = target as Material;
                 if (material == null) continue;
-                s_NativeBefore[material.GetInstanceID()] = new NativeState
+                s_NativeBefore[material] = new NativeState
                 {
                     RawQueue = material.rawRenderQueue,
                     Instancing = material.enableInstancing,
@@ -116,11 +115,11 @@ namespace NW.FairyToon.Editor
             foreach (Object target in m_Editor.targets)
             {
                 var material = target as Material;
-                if (material == null || !s_NativeBefore.TryGetValue(material.GetInstanceID(), out NativeState before)) continue;
+                if (material == null || !s_NativeBefore.TryGetValue(material, out NativeState before)) continue;
                 if (before.RawQueue != material.rawRenderQueue
                     || before.Instancing != material.enableInstancing
                     || before.DoubleSidedGI != material.doubleSidedGI)
-                    s_NativeChanged.Add(material.GetInstanceID());
+                    s_NativeChanged.Add(material);
             }
         }
 
@@ -135,14 +134,13 @@ namespace NW.FairyToon.Editor
         public override void ValidateMaterial(Material material)
         {
             if (material == null) return;
-            int id = material.GetInstanceID();
-            bool consumedOnly = s_ConsumedTargets.Contains(id) && !s_DirectTargets.Contains(id);
+            bool consumedOnly = s_ConsumedTargets.Contains(material) && !s_DirectTargets.Contains(material);
             if (s_InspectorPass || s_MenuOperation)
             {
                 // The callback kept this target's write. Every target of that write is listed, so the
                 // second material is not sent through Apply.
                 if (consumedOnly) return;
-                s_DirectTargets.Add(id);
+                s_DirectTargets.Add(material);
                 FairyToonMaterialSetup.Apply(material);
                 return;
             }
@@ -152,7 +150,7 @@ namespace NW.FairyToon.Editor
                 bool finish = s_PostPassesLeft == 0;
                 // A search keystroke changes the GUI without writing a material. Apply only a target
                 // whose property write hit the asset, or whose queue / instancing / GI field changed.
-                if (s_NativeChanged.Contains(id) || (s_DirectTargets.Contains(id) && !consumedOnly))
+                if (s_NativeChanged.Contains(material) || (s_DirectTargets.Contains(material) && !consumedOnly))
                     FairyToonMaterialSetup.Apply(material);
                 if (finish) ClearValidationScope();
                 return;
@@ -259,12 +257,12 @@ namespace NW.FairyToon.Editor
 
         internal static void NoteDirectWrite(Object target)
         {
-            if (target != null) s_DirectTargets.Add(target.GetInstanceID());
+            if (target != null) s_DirectTargets.Add(target);
         }
 
         internal static bool TargetWroteAsset(Object target)
         {
-            return target != null && s_DirectTargets.Contains(target.GetInstanceID());
+            return target != null && s_DirectTargets.Contains(target);
         }
 
         private static void DrawVersionFoldout()
@@ -345,7 +343,7 @@ namespace NW.FairyToon.Editor
                 foreach (Object target in m_Editor.targets)
                 {
                     var material = target as Material;
-                    if (material != null && s_NativeChanged.Contains(material.GetInstanceID()))
+                    if (material != null && s_NativeChanged.Contains(material))
                         FairyToonMaterialSetup.Apply(material);
                 }
             }
@@ -2214,15 +2212,10 @@ namespace NW.FairyToon.Editor
             values = null;
             if (!raw.Contains(","))
             {
-                Type type = Type.GetType(raw) ?? Type.GetType(raw + ", UnityEngine") ?? Type.GetType(raw + ", UnityEngine.CoreModule");
-                if (type == null)
-                {
-                    foreach (Assembly assembly in AppDomain.CurrentDomain.GetAssemblies())
-                    {
-                        type = assembly.GetType(raw);
-                        if (type != null) break;
-                    }
-                }
+                Type type = Type.GetType(raw)
+                    ?? Type.GetType(raw + ", UnityEngine.CoreModule")
+                    ?? Type.GetType(raw + ", UnityEngine")
+                    ?? typeof(CullMode).Assembly.GetType(raw);
                 if (type == null || !type.IsEnum) return false;
                 Array members = Enum.GetValues(type);
                 names = Enum.GetNames(type);
