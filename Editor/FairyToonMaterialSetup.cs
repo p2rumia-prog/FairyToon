@@ -193,7 +193,6 @@ namespace NW.FairyToon.Editor
                 material.SetInt("_DstBlend", (int)BlendMode.Zero);
                 material.SetInt("_SrcBlendAlpha", (int)BlendMode.One);
                 material.SetInt("_DstBlendAlpha", (int)BlendMode.Zero);
-                material.SetInt("_ZWrite", 1);
                 if (mode == Opaque) material.SetInt("_AlphaToMask", 0);
                 material.SetOverrideTag("RenderType", mode == Cutout ? "TransparentCutout" : "Opaque");
             }

@@ -24,11 +24,18 @@ namespace NW.FairyToon.Editor
         // and a 50px hex field beside it. An 18px rect is too narrow for the eyedropper.
         internal static bool Draw(Rect position, string label, ref Color value)
         {
+            float xMax = position.xMax;
             bool labeled = !string.IsNullOrEmpty(label);
             float labelWidth = labeled ? EditorGUIUtility.labelWidth : 0f;
-            const float hexWidth = 78f;
             const float gap = 4f;
-            float colorWidth = Mathf.Max(28f, position.width - labelWidth - gap - hexWidth);
+            float available = Mathf.Max(0f, position.xMax - position.x - labelWidth);
+            float colorWidth = 50f;
+            float hexWidth = 72f;
+            if (available < colorWidth + gap + hexWidth)
+            {
+                hexWidth = Mathf.Clamp(available - 28f - gap, 48f, 72f);
+                colorWidth = Mathf.Max(18f, available - gap - hexWidth);
+            }
             position.width = labelWidth + colorWidth;
             float intensity = value.maxColorComponent > 1f ? value.maxColorComponent : 1f;
             EditorGUI.BeginChangeCheck();
@@ -40,9 +47,9 @@ namespace NW.FairyToon.Editor
             int indent = EditorGUI.indentLevel;
             EditorGUI.indentLevel = 0;
             var hexRect = position;
-            hexRect.x += position.width + 4f;
-            hexRect.width = hexWidth;
-            if (hexRect.width > 10f) hex = EditorGUI.TextField(hexRect, GUIContent.none, hex);
+            hexRect.x = Mathf.Min(position.xMax + gap, position.xMax);
+            hexRect.width = Mathf.Max(0f, Mathf.Min(hexWidth, xMax - hexRect.x));
+            if (hexRect.width >= 48f) hex = EditorGUI.TextField(hexRect, GUIContent.none, hex);
             EditorGUI.indentLevel = indent;
             bool hexChanged = EditorGUI.EndChangeCheck();
             if (hexChanged)
@@ -641,7 +648,7 @@ namespace NW.FairyToon.Editor
             bool first = gem
                 ? SearchAllows("_MainTex", "_Color", "|ft.Tiling", "|ft.Offset")
                 : SearchAllows("_MainTex", "_Color", "_MainTexHSVG", "_MainColorAdjustMask", "|ft.Tiling", "|ft.Offset", "|sReset");
-            bool alpha = SearchAllows("_AlphaMaskMode", "_AlphaMask", "_AlphaMaskScale", "_AlphaMaskValue", "_Cutoff", "|sAlphaMaskWarnOpaque", "|ft.AlphaMaskInvert", "|ft.AlphaMaskTransparency", "|ft.AlphaMaskAdvanced", "|Offset", "|Scale");
+            bool alpha = SearchAllows("_AlphaMaskMode", "_AlphaMask", "_AlphaMaskScale", "_AlphaMaskValue", "_Cutoff", "|sAlphaMaskWarnOpaque", "|ft.AlphaMaskInvert", "|ft.AlphaMaskTransparency", "|ft.AlphaMaskAdvanced", "|Alpha Mask Offset");
             bool second = PrefixMatches("_Main2nd") || PrefixMatches("_FT_Main2nd") || SearchAllows("_Color2nd", "_UseMain2ndTex", "|UV Line Angle (radians)", "|Position / Direction (XY UV, XYZ Object, W UV Angle)", "|ft.Tiling", "|ft.Offset", "|Decal", "|sMirrorMode", "|sCopyMode", "|sPositionX", "|sPositionY", "|sScaleX", "|sScaleY", "|sScroll", "|sRotate");
             bool third = PrefixMatches("_Main3rd") || PrefixMatches("_FT_Main3rd") || SearchAllows("_Color3rd", "_UseMain3rdTex", "|UV Line Angle (radians)", "|Position / Direction (XY UV, XYZ Object, W UV Angle)", "|ft.Tiling", "|ft.Offset", "|Decal", "|sMirrorMode", "|sCopyMode", "|sPositionX", "|sPositionY", "|sScaleX", "|sScaleY", "|sScroll", "|sRotate");
             if (Searching && !first && !alpha && !second && !third) return;
@@ -753,12 +760,13 @@ namespace NW.FairyToon.Editor
                 }
                 if (Prop("_Cutoff") != null) P("_Cutoff");
                 string advancedLabel = Event.current.alt ? "_AlphaMaskScale, _AlphaMaskValue" : FairyToonL10n.Text("ft.AlphaMaskAdvanced");
-                bool showAdvanced = !Searching || Hit(advancedLabel) || Hit("_AlphaMaskScale") || Hit("_AlphaMaskValue") || Hit("Offset") || Hit("Scale");
+                bool namedOffset = Searching && s_Search.IndexOf("Alpha Mask Offset", StringComparison.OrdinalIgnoreCase) >= 0;
+                bool showAdvanced = !Searching || namedOffset || Hit(advancedLabel) || Hit("_AlphaMaskScale") || Hit("_AlphaMaskValue");
                 if (showAdvanced && !Searching)
                     m_AlphaMaskAdvanced = EditorGUILayout.Toggle(advancedLabel, m_AlphaMaskAdvanced);
                 else if (showAdvanced)
                     m_AlphaMaskAdvanced = EditorGUILayout.Toggle(advancedLabel, m_AlphaMaskAdvanced);
-                if (showAdvanced && (m_AlphaMaskAdvanced || Searching))
+                if (showAdvanced && (m_AlphaMaskAdvanced || namedOffset))
                 {
                     EditorGUI.indentLevel++;
                     P("_AlphaMaskScale", "Scale");
@@ -1045,13 +1053,18 @@ namespace NW.FairyToon.Editor
                 // callback did not keep the write, merge the edited axis into each material.
                 bool handled = false;
                 MaterialProperty.ApplyPropertyCallback original = property.applyPropertyCallback;
+                s_ProbeDepth++;
                 property.applyPropertyCallback = (changed, mask, previous) =>
                 {
                     handled = original(changed, mask, previous);
                     return true;
                 };
                 try { property.vectorValue = merged; }
-                finally { property.applyPropertyCallback = original; }
+                finally
+                {
+                    property.applyPropertyCallback = original;
+                    s_ProbeDepth--;
+                }
                 if (handled) return;
             }
             else if (property.targets == null || property.targets.Length <= 1)
@@ -1123,14 +1136,12 @@ namespace NW.FairyToon.Editor
 
             if (!ramp)
             {
-                Separator();
                 SubHeader("2nd Shadow");
                 TexWideColor("_Shadow2ndColorTex", "_Shadow2ndColor", "2nd Color");
                 P("_Shadow2ndBorder", "Border");
                 P("_Shadow2ndBlur", "Blur");
                 P("_Shadow2ndNormalStrength", "Normal Strength");
                 P("_Shadow2ndReceive", "Receive Shadow");
-                Separator();
                 SubHeader("3rd Shadow");
                 TexWideColor("_Shadow3rdColorTex", "_Shadow3rdColor", "3rd Color");
                 P("_Shadow3rdBorder", "Border");
@@ -1142,8 +1153,11 @@ namespace NW.FairyToon.Editor
             P("_ShadowMainStrength");
             P("_ShadowEnvStrength");
             P("_ShadowBorderColor");
+            Separator();
             P("_ShadowBorderRange");
+            Separator();
             Tex("_ShadowBlurMask", null, "Blur Mask");
+            Separator();
             P("_BackfaceForceShadow");
 
             string aoKey = PrefsPrefix + "Foldout.ShadowAO";
@@ -1585,7 +1599,7 @@ namespace NW.FairyToon.Editor
             P(n + "MainStrength", "sStrengthFromMain");
             P(n + "NormalStrength", "sNormalStrength");
             Separator();
-            bool drewMask = Tex(n + "BlendMask", null, "sMask");
+            bool drewMask = Tex(n + "BlendMask", n + "Blend", "sMask");
             string maskKey = PrefsPrefix + "Foldout.MatCapMask" + layer;
             bool maskOpen = EditorPrefs.GetBool(maskKey, false);
             if (drewMask)
@@ -1597,12 +1611,10 @@ namespace NW.FairyToon.Editor
             }
             if (maskOpen || (Searching && (LabelOnly("ft.Tiling") || LabelOnly("ft.Offset"))))
                 ScaleOffset(n + "BlendMask");
-            P(n + "Blend", "sMatCapBlend");
             P(n + "EnableLighting", "sEnableLighting");
             P(n + "ShadowMask", "sShadowMask");
             P(n + "BackfaceMask", "sBackfaceMask");
             P(n + "Lod", "sBlur");
-            Separator();
             P(n + "BlendMode", "sBlendMode");
             Separator();
             if (ShowsApplyTransparency()) P(n + "ApplyTransparency", "sApplyTransparency");
@@ -1628,6 +1640,7 @@ namespace NW.FairyToon.Editor
             if (ShowsApplyTransparency())
                 P("_RimApplyTransparency", "sApplyTransparency");
             P("_RimBlendMode", "sBlendMode");
+            Separator();
             P("_RimDirStrength", "sLightDirection");
             bool directed = Float("_RimDirStrength") > 0f || Prop("_RimDirStrength").hasMixedValue;
             if (directed)
@@ -1706,7 +1719,7 @@ namespace NW.FairyToon.Editor
         private void Outline()
         {
 
-            if (!SearchAllows("_UseOutline", "_ShadingModel", "_EFOutlineColor", "_EFOutlineSaturation", "_EFOutlineEdge", "_EFOutlineFlatten", "_EFOutlinePull", "_OutlineTex", "_OutlineColor", "_OutlineMode", "_OutlineWidthMask", "_OutlinePixelWidth", "_OutlineMinPixels", "_OutlineFadeStart", "_OutlineFadeEnd", "_OutlineWidth", "_OutlineFixWidth", "_OutlineVertexR2Width", "_OutlineCornerTaper", "_OutlineZBias", "_OutlineEnableLighting", "_OutlineCull", "_EFOutlineColor|Tint (x local shadow colour)", "_EFOutlineSaturation|Saturation", "_EFOutlineEdge|Edge Tint (A strength)", "_EFOutlineFlatten|Flatten (towards mid grey)", "_EFOutlinePull|Tint Pull (A amount)", "_OutlineTex|Color", "_OutlineWidthMask|Width (px at 1080p)", "_OutlineWidthMask|Width (cm)")) return;
+            if (!SearchAllows("_UseOutline", "_ShadingModel", "_EFOutlineColor", "_EFOutlineSaturation", "_EFOutlineEdge", "_EFOutlineFlatten", "_EFOutlinePull", "_OutlineTex", "_OutlineColor", "_OutlineMode", "_OutlineWidthMask", "_OutlinePixelWidth", "_OutlineMinPixels", "_OutlineFadeStart", "_OutlineFadeEnd", "_OutlineWidth", "_OutlineFixWidth", "_OutlineVertexR2Width", "_OutlineCornerTaper", "_OutlineZBias", "_OutlineEnableLighting", "_OutlineCull", "|ft.Tiling", "|ft.Offset", "_EFOutlineColor|Tint (x local shadow colour)", "_EFOutlineSaturation|Saturation", "_EFOutlineEdge|Edge Tint (A strength)", "_EFOutlineFlatten|Flatten (towards mid grey)", "_EFOutlinePull|Tint Pull (A amount)", "_OutlineTex|Color", "_OutlineWidthMask|Width (px at 1080p)", "_OutlineWidthMask|Width (cm)")) return;
             if (!BeginSection("Outline", "sOutlineSetting", Prop("_UseOutline"), false, PropertyBlock.Outline)) return;
             bool mixedShade = Prop("_ShadingModel") != null && Prop("_ShadingModel").hasMixedValue;
             bool endfield = mixedShade || Float("_ShadingModel") > 0.5f;
@@ -1953,7 +1966,7 @@ namespace NW.FairyToon.Editor
         {
             bool queue = SearchAllows("|sRenderingReset", "|Render Queue", "|Enable GPU Instancing", "|Double Sided Global Illumination",
                 "|" + L10n.Tr("Render Queue"), "|" + L10n.Tr("Enable GPU Instancing"), "|" + L10n.Tr("Double Sided Global Illumination"),
-                "_SrcBlend", "_DstBlend", "_SrcBlendAlpha", "_DstBlendAlpha", "_ZWrite", "_ZTest", "_OffsetFactor", "_OffsetUnits", "_Cull", "|Alpha To Coverage (hair)");
+                "_SrcBlend", "_DstBlend", "_SrcBlendAlpha", "_DstBlendAlpha", "_ZWrite", "_ZTest", "_OffsetFactor", "_OffsetUnits", "_Cull", "_OutlineCull", "|Alpha To Coverage (hair)");
             bool fur = SelectedRenderingMode(FairyToonMaterialSetup.Fur) && SearchAllows("_FurCull", "_FurZClip", "_FurZTest", "_FurColorMask", "_FurOffsetFactor", "_FurOffsetUnits", "_FurBlendOp", "_FurBlendOpAlpha", "_FurSrcBlend", "_FurDstBlend", "_FurSrcBlendAlpha", "_FurDstBlendAlpha", "_FurZWrite", "_FurAlphaToMask");
             if (!queue && !fur) return;
             if (!BeginSection("Rendering", "sRenderingSetting", null, false, PropertyBlock.Rendering, true, false)) return;
@@ -1965,6 +1978,12 @@ namespace NW.FairyToon.Editor
                     var material = target as Material;
                     if (material == null) continue;
                     FairyToonMaterialSetup.ResetRendering(material);
+                    s_NativeBefore[material] = new NativeState
+                    {
+                        RawQueue = material.rawRenderQueue,
+                        Instancing = material.enableInstancing,
+                        DoubleSidedGI = material.doubleSidedGI
+                    };
                 }
                 m_Props = MaterialEditor.GetMaterialProperties(m_Editor.targets);
             }
@@ -1976,6 +1995,8 @@ namespace NW.FairyToon.Editor
             P("_ZTest");
             P("_OffsetFactor");
             P("_OffsetUnits");
+            if (!SelectedRenderingMode(FairyToonMaterialSetup.Fur) && !SelectedRenderingMode(FairyToonMaterialSetup.Gem))
+                P("_OutlineCull");
             if (AnyCoverage(FairyToonMaterialSetup.Cutout))
                 P("_AlphaToMask", "Alpha To Coverage (hair)");
             if (SelectedRenderingMode(FairyToonMaterialSetup.Fur))
@@ -2185,7 +2206,7 @@ namespace NW.FairyToon.Editor
         // Outer fill is the measured title-bar colour. The inner fill is the darker content, inset so the outer colour reads as a 2px outline.
         private bool OpenBox(string shown, MaterialProperty toggle, PropertyBlock? block)
         {
-            EditorGUILayout.Space(5f);
+            EditorGUILayout.Space(2f);
             EditorGUILayout.BeginVertical(s_Outer);
             Rect row = GUILayoutUtility.GetRect(16f, 22f, GUILayout.ExpandWidth(true));
             float x = row.x + 1f;
@@ -2219,7 +2240,7 @@ namespace NW.FairyToon.Editor
 
         private void OpenContentBox()
         {
-            EditorGUILayout.Space(5f);
+            EditorGUILayout.Space(2f);
             EditorGUILayout.BeginVertical(s_Outer);
             EditorGUILayout.BeginVertical(s_Inner);
             m_InnerDepth++;
@@ -2246,7 +2267,7 @@ namespace NW.FairyToon.Editor
         private void Separator()
         {
             Rect rect = EditorGUILayout.GetControlRect(false, 1f);
-            if (Event.current.type == EventType.Repaint) EditorGUI.DrawRect(rect, s_Line);
+            if (Event.current.type == EventType.Repaint) EditorGUI.DrawRect(EditorGUI.IndentedRect(rect), s_Line);
         }
 
         private void HsvgSliders(string name)
@@ -2356,6 +2377,11 @@ namespace NW.FairyToon.Editor
             var property = Prop("_FurVector");
             if (property == null) return;
             Vector4 value = property.vectorValue;
+            bool showDirection = !Searching || LabelOnly("sVectorTex") || (!LabelOnly("sLength") && !LabelOnly("sVectorTex"));
+            bool showLength = !Searching || LabelOnly("sLength") || (!LabelOnly("sLength") && !LabelOnly("sVectorTex"));
+            if (!showDirection && !showLength) return;
+            if (showDirection)
+            {
             Rect row = EditorGUILayout.GetControlRect();
             BeginScope(row, property);
             EditorGUI.showMixedValue = property.hasMixedValue;
@@ -2375,7 +2401,9 @@ namespace NW.FairyToon.Editor
             if (mask != 0) SetDissolveComponents(property, value, mask);
             EditorGUI.showMixedValue = false;
             EndScope();
-            row = EditorGUILayout.GetControlRect();
+            }
+            if (!showLength) return;
+            Rect row = EditorGUILayout.GetControlRect();
             BeginScope(row, property);
             EditorGUI.showMixedValue = property.hasMixedValue;
             EditorGUI.BeginChangeCheck();
@@ -2400,17 +2428,13 @@ namespace NW.FairyToon.Editor
             using (new EditorGUI.DisabledScope(true)) P("_ZWrite");
         }
 
-        // Apply forces ZWrite on opaque, cutout, and fur. An editable control there would not stick.
+        // Fur's body pass always writes depth. Opaque and cutout keep the value set in Base.
         private bool ZWriteOverwritten()
         {
             if (m_Editor == null) return false;
             foreach (Object target in m_Editor.targets)
-            {
-                int mode = FairyToonMaterialSetup.GetRenderingMode(target as Material);
-                if (mode == FairyToonMaterialSetup.Transparent || mode == FairyToonMaterialSetup.Refraction || mode == FairyToonMaterialSetup.Gem)
-                    continue;
-                return true;
-            }
+                if (FairyToonMaterialSetup.GetRenderingMode(target as Material) == FairyToonMaterialSetup.Fur)
+                    return true;
             return false;
         }
 
@@ -2562,6 +2586,7 @@ namespace NW.FairyToon.Editor
             {
                 bool handled = false;
                 MaterialProperty.ApplyPropertyCallback original = prop.applyPropertyCallback;
+                s_ProbeDepth++;
                 prop.applyPropertyCallback = (changed, mask, previous) =>
                 {
                     handled = original(changed, mask, previous);
@@ -2573,7 +2598,11 @@ namespace NW.FairyToon.Editor
                     color.a = alpha;
                     prop.colorValue = color;
                 }
-                finally { prop.applyPropertyCallback = original; }
+                finally
+                {
+                    prop.applyPropertyCallback = original;
+                    s_ProbeDepth--;
+                }
                 if (handled) return;
             }
             if (prop.targets == null) return;
@@ -2605,17 +2634,31 @@ namespace NW.FairyToon.Editor
             bool wantScale = invertChanged;
             bool wantOffset = invertChanged || transparencyChanged;
             if (scale.targets == null) return;
+            bool pairLocked = false;
+            foreach (Object target in scale.targets)
+            {
+                var material = target as Material;
+                if (material == null) continue;
+                if ((wantScale && Locked(material, scale.name)) || (wantOffset && Locked(material, offset.name)))
+                    pairLocked = true;
+            }
             Undo.IncrementCurrentGroup();
             int group = Undo.GetCurrentGroup();
             try
             {
-                bool scaleHandled = !wantScale || OfferFloat(scale, callbackScale);
-                bool offsetHandled = !wantOffset || OfferFloat(offset, callbackOffset);
+                bool scaleHandled = false;
+                bool offsetHandled = false;
+                if (!pairLocked)
+                {
+                    scaleHandled = !wantScale || OfferFloat(scale, callbackScale);
+                    offsetHandled = !wantOffset || OfferFloat(offset, callbackOffset);
+                }
                 if (scaleHandled && offsetHandled) return;
                 foreach (Object target in scale.targets)
                 {
                     var material = target as Material;
                     if (material == null || !material.HasProperty(scale.name) || !material.HasProperty(offset.name)) continue;
+                    if ((wantScale && Locked(material, scale.name)) || (wantOffset && Locked(material, offset.name))) continue;
                     float storedScale = material.GetFloat(scale.name);
                     float storedOffset = material.GetFloat(offset.name);
                     bool storedInvert = storedScale < 0f;
@@ -2932,8 +2975,9 @@ namespace NW.FairyToon.Editor
             Rect row = m_Editor.TexturePropertySingleLine(new GUIContent(shown), tex);
             if (color == null) return;
             Rect bar = row;
-            bar.xMin = row.x + EditorGUIUtility.labelWidth + 68f;
-            if (bar.width < 24f) return;
+            bar.xMin = Mathf.Min(row.xMax - 18f, row.x + EditorGUIUtility.labelWidth + 68f);
+            bar.xMax = row.xMax;
+            if (bar.width < 8f) bar = new Rect(row.xMax - 18f, row.y, 18f, row.height);
             BeginScope(bar, color);
             EditorGUI.showMixedValue = color.hasMixedValue;
             EditorGUI.BeginChangeCheck();
@@ -3119,29 +3163,45 @@ namespace NW.FairyToon.Editor
             Color title = s_ProSkin ? new Color32(90, 89, 90, 255) : new Color32(255, 255, 255, 255);
             Color content = s_ProSkin ? new Color32(57, 56, 57, 255) : new Color32(232, 232, 232, 255);
             s_Line = s_ProSkin ? new Color(0.35f, 0.35f, 0.35f, 1f) : new Color(0.4f, 0.4f, 0.4f, 1f);
-            s_OuterTex = Solid(title);
-            s_InnerTex = Solid(content);
+            s_OuterTex = Rounded(title);
+            s_InnerTex = Rounded(content);
             s_Outer = new GUIStyle
             {
+                border = new RectOffset(6, 6, 6, 6),
                 margin = new RectOffset(4, 4, 0, 4),
                 padding = new RectOffset(2, 2, 0, 2)
             };
             s_Outer.normal.background = s_OuterTex;
-            s_Inner = new GUIStyle { padding = new RectOffset(6, 4, 4, 4) };
+            s_Inner = new GUIStyle
+            {
+                border = new RectOffset(6, 6, 6, 6),
+                padding = new RectOffset(6, 4, 4, 4)
+            };
             s_Inner.normal.background = s_InnerTex;
             s_Box = s_Outer;
             s_Gear = new GUIStyle(GUIStyle.none) { alignment = TextAnchor.MiddleCenter };
         }
 
-        private static Texture2D Solid(Color color)
+        private static Texture2D Rounded(Color color)
         {
-            var texture = new Texture2D(4, 4, TextureFormat.RGBA32, false)
+            const int size = 16;
+            const int radius = 5;
+            var texture = new Texture2D(size, size, TextureFormat.RGBA32, false)
             {
                 hideFlags = HideFlags.HideAndDontSave,
                 wrapMode = TextureWrapMode.Clamp
             };
-            var pixels = new Color[16];
-            for (int i = 0; i < pixels.Length; i++) pixels[i] = color;
+            var pixels = new Color[size * size];
+            for (int y = 0; y < size; y++)
+            for (int x = 0; x < size; x++)
+            {
+                float dx = x < radius ? radius - x - 0.5f : x >= size - radius ? x - (size - radius) + 0.5f : 0f;
+                float dy = y < radius ? radius - y - 0.5f : y >= size - radius ? y - (size - radius) + 0.5f : 0f;
+                float cover = Mathf.Clamp01(radius - Mathf.Sqrt(dx * dx + dy * dy));
+                var pixel = color;
+                pixel.a *= cover;
+                pixels[y * size + x] = pixel;
+            }
             texture.SetPixels(pixels);
             texture.Apply();
             return texture;
