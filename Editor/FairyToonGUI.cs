@@ -606,7 +606,7 @@ namespace NW.FairyToon.Editor
             P("_ShadingModel", "Shading Model");
             P("_Cull");
             if (AnyCoverage(FairyToonMaterialSetup.Opaque) || Prop("_TransparentMode")?.hasMixedValue == true)
-                P("_ZWrite");
+                DrawZWrite();
             if (AnyCoverage(FairyToonMaterialSetup.Cutout, FairyToonMaterialSetup.Transparent, FairyToonMaterialSetup.Fur))
                 P("_Cutoff");
             P("_FlipNormal");
@@ -1173,13 +1173,12 @@ namespace NW.FairyToon.Editor
             if (!BeginSection(prefs, title, Prop(second ? "_UseEmission2nd" : "_UseEmission"), false, block, false)) return;
             Tex(prefix + "Map", prefix + "Color", "Color");
             ColorAlpha(prefix + "Color");
-            P(prefix + "Blend", "sBlend");
             P(prefix + "BlendMode", "sBlendMode");
             P(prefix + "MainStrength", "sStrengthFromMain");
             ScaleOffset(prefix + "Map");
             P(prefix + "Map_UVMode", "UV Mode");
             P(prefix + "Map_ScrollRotate", "Scroll XY / Angle Z / Rotation Speed W");
-            Tex(prefix + "BlendMask", null, "sMask");
+            Tex(prefix + "BlendMask", prefix + "Blend", "sMask");
             ScaleOffset(prefix + "BlendMask");
             P(prefix + "BlendMask_ScrollRotate", "Mask Scroll XY / Angle Z / Rotation Speed W");
             P(prefix + "Blink", "Blink Strength / Hard / Speed / Phase");
@@ -1567,32 +1566,33 @@ namespace NW.FairyToon.Editor
         {
             string n = "_MatCap" + layer;
             Tex(n + "Tex", n + "Color", "sMatCap");
+            string uvKey = PrefsPrefix + "Foldout.MatCapUV" + layer;
+            bool uvOpen = EditorPrefs.GetBool(uvKey, false);
+            Rect texRow = GUILayoutUtility.GetLastRect();
+            bool nextUv = EditorGUI.Foldout(new Rect(texRow.x + 2f, texRow.y, 14f, texRow.height), uvOpen, GUIContent.none, true);
+            if (nextUv != uvOpen) EditorPrefs.SetBool(uvKey, nextUv);
+            if (nextUv || Searching)
+            {
+                ScaleOffset(n + "Tex");
+                P(n + "ZRotCancel", "sZRotCancel");
+                P(n + "Perspective", "sFixPerspective");
+            }
             ColorAlpha(n + "Color");
-            P(n + "Blend", "sMatCapBlend");
             P(n + "MainStrength", "sStrengthFromMain");
             P(n + "NormalStrength", "sNormalStrength");
-            Tex(n + "BlendMask", null, "sMask");
+            Tex(n + "BlendMask", n + "Blend", "sMask");
             ScaleOffset(n + "BlendMask");
             P(n + "EnableLighting", "sEnableLighting");
             P(n + "ShadowMask", "sShadowMask");
             P(n + "BackfaceMask", "sBackfaceMask");
             P(n + "Lod", "sBlur");
             P(n + "BlendMode", "sBlendMode");
-            if (PrimaryMode() != FairyToonMaterialSetup.Opaque) P(n + "ApplyTransparency", "sApplyTransparency");
+            if (ShowsApplyTransparency()) P(n + "ApplyTransparency", "sApplyTransparency");
             P(n + "CustomNormal", "sCustomNormal");
             if (Prop(n + "CustomNormal") != null && (Number(Prop(n + "CustomNormal")) > 0.5f || Prop(n + "CustomNormal").hasMixedValue))
             {
                 Tex(n + "BumpMap", n + "BumpScale", "sNormalMap");
                 ScaleOffset(n + "BumpMap");
-            }
-            string uvKey = PrefsPrefix + "Foldout.MatCapUV" + layer;
-            bool uvOpen = EditorGUILayout.Foldout(EditorPrefs.GetBool(uvKey, false), "UV", true);
-            if (uvOpen != EditorPrefs.GetBool(uvKey, false)) EditorPrefs.SetBool(uvKey, uvOpen);
-            if (uvOpen || Searching)
-            {
-                ScaleOffset(n + "Tex");
-                P(n + "ZRotCancel", "sZRotCancel");
-                P(n + "Perspective", "sFixPerspective");
             }
         }
 
@@ -1607,23 +1607,28 @@ namespace NW.FairyToon.Editor
             P("_RimEnableLighting", "sEnableLighting");
             P("_RimShadowMask", "sShadowMask");
             P("_RimBackfaceMask", "sBackfaceMask");
+            if (ShowsApplyTransparency())
+                P("_RimApplyTransparency", "sApplyTransparency");
             P("_RimBlendMode", "sBlendMode");
-            EditorGUILayout.Space(2f);
             P("_RimDirStrength", "sLightDirection");
-            InvBorder("_RimBorder");
-            P("_RimBlur", "sBlur");
-            P("_RimNormalStrength", "sNormalStrength");
-            P("_RimFresnelPower", "sFresnel");
-            if (Float("_RimDirStrength") > 0f || Prop("_RimDirStrength").hasMixedValue)
+            bool directed = Float("_RimDirStrength") > 0f || Prop("_RimDirStrength").hasMixedValue;
+            if (directed)
             {
+                InvBorder("_RimBorder");
+                P("_RimBlur", "sBlur");
                 P("_RimDirRange");
                 P("_RimIndirRange");
                 P("_RimIndirColor");
                 InvBorder("_RimIndirBorder");
                 P("_RimIndirBlur");
             }
-            if (PrimaryMode() != FairyToonMaterialSetup.Opaque)
-                P("_RimApplyTransparency", "sApplyTransparency");
+            else
+            {
+                InvBorder("_RimBorder");
+                P("_RimBlur", "sBlur");
+            }
+            P("_RimNormalStrength", "sNormalStrength");
+            P("_RimFresnelPower", "sFresnel");
 
             EndSection();
         }
@@ -1930,7 +1935,7 @@ namespace NW.FairyToon.Editor
             EditorGUILayout.BeginVertical(s_Box);
             EditorGUILayout.LabelField(FairyToonL10n.Text("sRendering"));
             P("_Cull");
-            P("_ZWrite");
+            DrawZWrite();
             P("_ZTest");
             P("_OffsetFactor");
             P("_OffsetUnits");
@@ -2236,6 +2241,7 @@ namespace NW.FairyToon.Editor
             {
                 Rect row = EditorGUILayout.GetControlRect();
                 BeginScope(row, property);
+                EditorGUI.showMixedValue = property.hasMixedValue;
                 EditorGUI.BeginChangeCheck();
                 Vector2 before = new Vector2(value.x, value.y);
                 Vector2 scroll = EditorGUI.Vector2Field(row, FairyToonL10n.Text("sScroll"), before);
@@ -2246,12 +2252,14 @@ namespace NW.FairyToon.Editor
                     if (!Mathf.Approximately(scroll.y, before.y)) { value.y = scroll.y; mask |= 2; }
                     if (mask != 0) SetDissolveComponents(property, value, mask);
                 }
+                EditorGUI.showMixedValue = false;
                 EndScope();
             }
             if (showRotate)
             {
                 Rect row = EditorGUILayout.GetControlRect();
                 BeginScope(row, property);
+                EditorGUI.showMixedValue = property.hasMixedValue;
                 EditorGUI.BeginChangeCheck();
                 float rotate = value.w / (Mathf.PI * 2f);
                 rotate = EditorGUI.FloatField(row, FairyToonL10n.Text("sRotate"), rotate);
@@ -2261,6 +2269,7 @@ namespace NW.FairyToon.Editor
                     value.w = rotate * Mathf.PI * 2f;
                     SetDissolveComponents(property, value, 8);
                 }
+                EditorGUI.showMixedValue = false;
                 EndScope();
             }
             if ((!Searching || LabelOnly("sReset")) && GUILayout.Button(FairyToonL10n.Text("sReset")))
@@ -2302,6 +2311,7 @@ namespace NW.FairyToon.Editor
             Vector4 value = property.vectorValue;
             Rect row = EditorGUILayout.GetControlRect();
             BeginScope(row, property);
+            EditorGUI.showMixedValue = property.hasMixedValue;
             EditorGUI.BeginChangeCheck();
             Vector3 before = new Vector3(value.x, value.y, value.z);
             Vector3 direction = EditorGUI.Vector3Field(row, FairyToonL10n.Text("sVectorTex"), before);
@@ -2313,9 +2323,11 @@ namespace NW.FairyToon.Editor
                 if (!Mathf.Approximately(direction.z, before.z)) { value.z = direction.z; mask |= 4; }
                 if (mask != 0) SetDissolveComponents(property, value, mask);
             }
+            EditorGUI.showMixedValue = false;
             EndScope();
             row = EditorGUILayout.GetControlRect();
             BeginScope(row, property);
+            EditorGUI.showMixedValue = property.hasMixedValue;
             EditorGUI.BeginChangeCheck();
             float length = EditorGUI.FloatField(row, FairyToonL10n.Text("sLength"), value.w);
             if (EditorGUI.EndChangeCheck())
@@ -2324,7 +2336,48 @@ namespace NW.FairyToon.Editor
                 value.w = length;
                 SetDissolveComponents(property, value, 8);
             }
+            EditorGUI.showMixedValue = false;
             EndScope();
+        }
+
+        private void DrawZWrite()
+        {
+            if (!ZWriteOverwritten())
+            {
+                P("_ZWrite");
+                return;
+            }
+            using (new EditorGUI.DisabledScope(true)) P("_ZWrite");
+        }
+
+        // Apply forces ZWrite on opaque, cutout, and fur. An editable control there would not stick.
+        private bool ZWriteOverwritten()
+        {
+            if (m_Editor == null) return false;
+            foreach (Object target in m_Editor.targets)
+            {
+                int mode = FairyToonMaterialSetup.GetRenderingMode(target as Material);
+                if (mode == FairyToonMaterialSetup.Transparent || mode == FairyToonMaterialSetup.Refraction || mode == FairyToonMaterialSetup.Gem)
+                    continue;
+                return true;
+            }
+            return false;
+        }
+
+        private bool ShowsApplyTransparency()
+        {
+            if (m_Editor == null) return false;
+            foreach (Object target in m_Editor.targets)
+            {
+                var material = target as Material;
+                if (material == null) continue;
+                int mode = FairyToonMaterialSetup.GetRenderingMode(material);
+                if (mode == FairyToonMaterialSetup.Transparent || mode == FairyToonMaterialSetup.Refraction || mode == FairyToonMaterialSetup.Gem)
+                    return true;
+                if (mode != FairyToonMaterialSetup.Fur || !material.HasProperty("_FurMode")) continue;
+                if (Mathf.RoundToInt(material.GetFloat("_FurMode")) != FairyToonMaterialSetup.FurCutout) return true;
+            }
+            return false;
         }
 
         private void DecalPlacement(string texture, MaterialProperty copy, MaterialProperty flipCopy)
