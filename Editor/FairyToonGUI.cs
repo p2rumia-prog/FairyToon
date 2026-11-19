@@ -2382,18 +2382,18 @@ namespace NW.FairyToon.Editor
             if (!showDirection && !showLength) return;
             if (showDirection)
             {
-            Rect row = EditorGUILayout.GetControlRect();
-            BeginScope(row, property);
+            Rect dirRow = EditorGUILayout.GetControlRect();
+            BeginScope(dirRow, property);
             EditorGUI.showMixedValue = property.hasMixedValue;
-            Rect label = row;
+            Rect label = dirRow;
             label.width = EditorGUIUtility.labelWidth;
             EditorGUI.LabelField(label, FairyToonL10n.Text("sVectorTex"));
-            float field = (row.xMax - label.xMax) / 3f;
+            float field = (dirRow.xMax - label.xMax) / 3f;
             int mask = 0;
             for (int axis = 0; axis < 3; axis++)
             {
                 EditorGUI.BeginChangeCheck();
-                float next = EditorGUI.FloatField(new Rect(label.xMax + axis * field, row.y, field - 2f, row.height), value[axis]);
+                float next = EditorGUI.FloatField(new Rect(label.xMax + axis * field, dirRow.y, field - 2f, dirRow.height), value[axis]);
                 if (!EditorGUI.EndChangeCheck()) continue;
                 value[axis] = next;
                 mask |= 1 << axis;
@@ -2403,11 +2403,11 @@ namespace NW.FairyToon.Editor
             EndScope();
             }
             if (!showLength) return;
-            Rect row = EditorGUILayout.GetControlRect();
-            BeginScope(row, property);
+            Rect lengthRow = EditorGUILayout.GetControlRect();
+            BeginScope(lengthRow, property);
             EditorGUI.showMixedValue = property.hasMixedValue;
             EditorGUI.BeginChangeCheck();
-            float length = EditorGUI.FloatField(row, FairyToonL10n.Text("sLength"), value.w);
+            float length = EditorGUI.FloatField(lengthRow, FairyToonL10n.Text("sLength"), value.w);
             if (EditorGUI.EndChangeCheck())
             {
                 value = property.vectorValue;
