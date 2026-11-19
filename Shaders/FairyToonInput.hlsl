@@ -211,8 +211,10 @@ CBUFFER_START(UnityPerMaterial)
     half   _RimShadeBlur;
     half   _RimShadeFresnelPower;
 
-    // Rim light
+    // Rim light. _RimColorTex_ST is unconditional so every pass of a shader shares one UnityPerMaterial layout.
+    // Default material value is (1, 1, 0, 0), Unity's scale/offset for a texture declared without NoScaleOffset.
     half4  _RimColor;
+    float4 _RimColorTex_ST;
     half   _RimBorder;
     half   _RimBlur;
     half   _RimFresnelPower;

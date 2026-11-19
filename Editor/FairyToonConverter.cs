@@ -167,7 +167,11 @@ namespace NW.FairyToon.Editor
                         ? FairyToonMaterialSetup.Cutout : FairyToonMaterialSetup.Transparent);
                 target.SetFloat("_UseOutline", variant.Outline ? 1f : 0f);
                 if (variant.Mode == FairyToonMaterialSetup.Refraction) target.SetFloat("_RefractionBlur", variant.Blur ? 1f : 0f);
-                if (variant.Mode == FairyToonMaterialSetup.Fur) target.SetFloat("_FurMode", variant.FurMode);
+                if (variant.Mode == FairyToonMaterialSetup.Fur)
+                {
+                    target.SetFloat("_FurMode", variant.FurMode);
+                    FairyToonMaterialSetup.SetFurShellDefaults(target, variant.FurMode);
+                }
                 // Preserve the effective source order as an explicit queue, even when it matches this shader's default.
                 // Apply preserves authored offsets; lilToon defaults include Transparent 2460 and Refraction 2900.
                 if (snapshot.renderQueue != target.renderQueue)
@@ -175,8 +179,9 @@ namespace NW.FairyToon.Editor
                     report.AppliedOverrides.Add("Copied lilToon render queue " + snapshot.renderQueue + " before profile/coverage setup.");
                 }
                 target.renderQueue = snapshot.renderQueue;
-                if (options.TransparentHairToCutout && variant.Mode == FairyToonMaterialSetup.Transparent
-                    && Contains(report.SourceShader, "Transparent") && Contains(source.name, "hair"))
+                bool convertHair = options.TransparentHairToCutout && variant.Mode == FairyToonMaterialSetup.Transparent
+                    && Contains(report.SourceShader, "Transparent") && Contains(source.name, "hair");
+                if (convertHair)
                 {
                     target.SetFloat("_TransparentMode", FairyToonMaterialSetup.Cutout);
                     target.SetFloat("_Cutoff", 0.5f);
@@ -184,6 +189,12 @@ namespace NW.FairyToon.Editor
                     report.AppliedOverrides.Add("Transparent hair to Cutout: _TransparentMode = 1, _Cutoff = 0.5, _AlphaToMask = 1.");
                 }
                 var profileProperties = ApplyProfiles(source, target, profiles, report);
+                if (convertHair && FairyToonMaterialSetup.GetRenderingMode(target) == FairyToonMaterialSetup.Cutout
+                    && target.renderQueue > (int)RenderQueue.GeometryLast)
+                {
+                    target.renderQueue = FairyToonMaterialSetup.GetDefaultRenderQueue(FairyToonMaterialSetup.Cutout);
+                    report.AppliedOverrides.Add("Moved converted hair from its transparent queue to the Cutout queue.");
+                }
                 ApplyLilToonSSAO(target, profileProperties);
                 FairyToonMaterialSetup.Apply(target);
                 ReportInactiveDissolve(snapshot, target, report);

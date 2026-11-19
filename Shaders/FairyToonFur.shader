@@ -363,7 +363,7 @@ Shader "FairyToon/Fur"
         // Rim Light
         [Toggle(_FT_RIM)] _UseRim ("Rim Light", Int) = 0
         _RimColor ("Color", Color) = (0.66, 0.5, 0.48, 1)
-        [NoScaleOffset] _RimColorTex ("Texture", 2D) = "white" {}
+        _RimColorTex ("Texture", 2D) = "white" {}
         _RimMainStrength ("Multiply Main Color", Range(0, 1)) = 0
         _RimNormalStrength ("Normal Strength", Range(0, 1)) = 1.0
         _RimBorder ("Border", Range(0, 1)) = 0.5

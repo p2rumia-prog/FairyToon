@@ -616,7 +616,7 @@ half3 FairyToonEndfieldShade(FairyToonSurface s, inout FairyToonLight l)
     }
     fresnelRim *= 1.0 - eye;
     #if defined(_FT_EF_FACE)
-        fresnelRim *= SAMPLE_TEXTURE2D(_RimColorTex, sampler_MainTex, s.uvMain).r * saturate(dot(UNITY_MATRIX_V[0].xyz, N));
+        fresnelRim *= SAMPLE_TEXTURE2D(_RimColorTex, sampler_MainTex, s.uvMain * _RimColorTex_ST.xy + _RimColorTex_ST.zw).r * saturate(dot(UNITY_MATRIX_V[0].xyz, N));
     #endif
     col += fresnelRim * rimMask * _EFRimStrength * _EFRimColor.rgb * lerp(0.25, diffuseLit, _EFRimAlbedo) * mainSum;
     #if !defined(_FT_EF_FACE) && !defined(_FT_EF_EYE)
