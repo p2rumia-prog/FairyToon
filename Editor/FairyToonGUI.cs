@@ -110,12 +110,13 @@ namespace NW.FairyToon.Editor
         private static bool s_InspectorPass;
         private static bool s_MenuOperation;
         private static int s_PostPassesLeft;
+        private static int s_ProbeDepth;
 
         internal static bool WroteAsset => s_DirectTargets.Count > 0;
 
         internal static void NoteCallbackResult(MaterialProperty property, bool handled)
         {
-            if (property == null || property.targets == null) return;
+            if (s_ProbeDepth > 0 || property == null || property.targets == null) return;
             for (int i = 0; i < property.targets.Length; i++)
             {
                 Object target = property.targets[i];
@@ -178,7 +179,7 @@ namespace NW.FairyToon.Editor
 
         public override void ValidateMaterial(Material material)
         {
-            if (material == null) return;
+            if (s_ProbeDepth > 0 || material == null) return;
             // A kept callback skips Apply, but the inspector's follow-up pass still has to count this material
             // exactly once. Returning before the count left the skip for a later, unrelated validation.
             bool pending = s_PendingSkip.Remove(material);
@@ -450,16 +451,7 @@ namespace NW.FairyToon.Editor
                 SeeThrough();
             Stencil();
             Rendering();
-            if (EditorGUI.EndChangeCheck())
-            {
-                NoteNativeChanges();
-                foreach (Object target in m_Editor.targets)
-                {
-                    var material = target as Material;
-                    if (material != null && s_NativeChanged.Contains(material))
-                        FairyToonMaterialSetup.Apply(material);
-                }
-            }
+            if (EditorGUI.EndChangeCheck()) NoteNativeChanges();
         }
 
         private void Group(string key)
@@ -2399,7 +2391,8 @@ namespace NW.FairyToon.Editor
             bool changeScaleY = DecalSlider(tex, tex.name + "_ST.y", "sScaleY", scaleY, -1f, 1f, ref nextScaleY);
             if (!changeX && !changeY && !changeScaleX && !changeScaleY) return;
             Vector4 proposed = DecalVector(st, copyMode, changeX, changeY, changeScaleX, changeScaleY, nextX, nextY, nextScaleX, nextScaleY);
-            if (OfferTextureScale(tex, proposed)) return;
+            int editedMask = (changeX || changeScaleX ? 1 | 4 : 0) | (changeY || changeScaleY ? 2 | 8 : 0);
+            if (OfferTextureScale(tex, proposed, editedMask)) return;
             if (tex.targets == null) return;
             Undo.IncrementCurrentGroup();
             int group = Undo.GetCurrentGroup();
@@ -2476,18 +2469,23 @@ namespace NW.FairyToon.Editor
             return 0;
         }
 
-        private static bool OfferTextureScale(MaterialProperty tex, Vector4 value)
+        private static bool OfferTextureScale(MaterialProperty tex, Vector4 value, int mask)
         {
             if (tex.applyPropertyCallback == null) return false;
             bool handled = false;
             MaterialProperty.ApplyPropertyCallback original = tex.applyPropertyCallback;
-            tex.applyPropertyCallback = (changed, mask, previous) =>
+            s_ProbeDepth++;
+            tex.applyPropertyCallback = (changed, changedMask, previous) =>
             {
                 handled = original(changed, mask, previous);
                 return true;
             };
             try { tex.textureScaleAndOffset = value; }
-            finally { tex.applyPropertyCallback = original; }
+            finally
+            {
+                tex.applyPropertyCallback = original;
+                s_ProbeDepth--;
+            }
             return handled;
         }
 
@@ -2579,13 +2577,18 @@ namespace NW.FairyToon.Editor
             if (prop.applyPropertyCallback == null) return false;
             bool handled = false;
             MaterialProperty.ApplyPropertyCallback original = prop.applyPropertyCallback;
+            s_ProbeDepth++;
             prop.applyPropertyCallback = (changed, mask, previous) =>
             {
                 handled = original(changed, mask, previous);
                 return true;
             };
-            try { prop.floatValue = value; }
-            finally { prop.applyPropertyCallback = original; }
+            try { SetNumber(prop, value); }
+            finally
+            {
+                prop.applyPropertyCallback = original;
+                s_ProbeDepth--;
+            }
             return handled;
         }
 
