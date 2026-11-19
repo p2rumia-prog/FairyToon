@@ -78,7 +78,19 @@ namespace NW.FairyToon.Editor
             material.SetFloat("_ZTest", (int)CompareFunction.LessEqual);
             material.SetFloat("_OffsetFactor", 0f);
             material.SetFloat("_OffsetUnits", 0f);
-            material.SetFloat("_ZWrite", 1f);
+            // Gem's shader and lilToon both default ZWrite to 0. Every other mode starts at 1.
+            material.SetFloat("_ZWrite", mode == Gem ? 0f : 1f);
+            if (mode == Gem && material.HasProperty("_Cull")) material.SetFloat("_Cull", 0f);
+            if (material.HasProperty("_OutlineCull")) material.SetFloat("_OutlineCull", 1f);
+            if (mode == Fur)
+            {
+                material.SetFloat("_FurZTest", (int)CompareFunction.LessEqual);
+                material.SetFloat("_FurOffsetFactor", 0f);
+                material.SetFloat("_FurOffsetUnits", 0f);
+                material.SetFloat("_FurColorMask", 15f);
+                material.SetFloat("_FurBlendOp", (int)BlendOp.Add);
+                material.SetFloat("_FurBlendOpAlpha", (int)BlendOp.Add);
+            }
             Apply(material);
         }
 
