@@ -172,6 +172,7 @@ namespace NW.FairyToon.Editor
             {
                 try
                 {
+                    FairyToonGUI.CollectMenuAssetChanges();
                     if (!(callback && !FairyToonGUI.WroteAsset))
                     {
                         MigrateCoverage(coverage);

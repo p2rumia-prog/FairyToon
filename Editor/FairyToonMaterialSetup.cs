@@ -150,15 +150,7 @@ namespace NW.FairyToon.Editor
             return true;
         }
 
-        private static readonly HashSet<Material> s_ExplicitQueue = new HashSet<Material>();
-
-        // A queue the user just chose must survive the coverage migration in the following Apply.
-        public static bool HoldExplicitQueue(Material material, bool hold)
-        {
-            if (material == null) return false;
-            if (hold) { s_ExplicitQueue.Add(material); return true; }
-            return s_ExplicitQueue.Remove(material);
-        }
+        private static readonly Dictionary<Material, int> s_CoverageMode = new Dictionary<Material, int>();
 
         public static void Apply(Material material)
         {
@@ -179,7 +171,11 @@ namespace NW.FairyToon.Editor
                 material.SetFloat("_TransparentMode", fur && furMode == FurCutout ? Cutout : Transparent);
             }
             int mode = Mathf.RoundToInt(Get(material, "_TransparentMode"));
-            if (!special && !inheritQueue && !HoldExplicitQueue(material, false))
+            // The first observation records the mode. Later Applies migrate only when coverage itself changes,
+            // so an explicit Geometry 2000 on a Transparent material is not rewritten, and the mark cannot leak.
+            bool modeChanged = s_CoverageMode.TryGetValue(material, out int seenMode) && seenMode != mode;
+            s_CoverageMode[material] = mode;
+            if (!special && !inheritQueue && modeChanged)
             {
                 int queue = material.renderQueue;
                 bool coverageDefault = queue == (int)RenderQueue.Geometry || queue == (int)RenderQueue.AlphaTest;
