@@ -66,6 +66,7 @@ namespace NW.FairyToon.Editor
         private static readonly HashSet<int> s_NativeChanged = new HashSet<int>();
         private static readonly Dictionary<int, NativeState> s_NativeBefore = new Dictionary<int, NativeState>();
         private static bool s_InspectorPass;
+        private static bool s_MenuOperation;
         private static int s_PostPassesLeft;
 
         internal static bool WroteAsset => s_DirectTargets.Count > 0;
@@ -135,7 +136,7 @@ namespace NW.FairyToon.Editor
             if (material == null) return;
             int id = material.GetInstanceID();
             bool consumedOnly = s_ConsumedTargets.Contains(id) && !s_DirectTargets.Contains(id);
-            if (s_InspectorPass)
+            if (s_InspectorPass || s_MenuOperation)
             {
                 // The callback kept this target's write. Every target of that write is listed, so the
                 // second material is not sent through Apply.
@@ -211,7 +212,7 @@ namespace NW.FairyToon.Editor
             }
         }
 
-        private struct SavedCallback
+        internal struct SavedCallback
         {
             public MaterialProperty Property;
             public MaterialProperty.ApplyPropertyCallback Original;
@@ -234,6 +235,35 @@ namespace NW.FairyToon.Editor
         {
             for (int i = 0; i < wrapped.Count; i++)
                 if (wrapped[i].Property != null) wrapped[i].Property.applyPropertyCallback = wrapped[i].Original;
+        }
+
+        // The gear menu runs after OnGUI restores the original callbacks. Wrap them again for that one action
+        // so its setter validation uses the same per-material result as a field edit.
+        internal static void BeginMenuOperation(MaterialProperty[] props, List<SavedCallback> wrapped)
+        {
+            s_ConsumedTargets.Clear();
+            s_DirectTargets.Clear();
+            s_MenuOperation = true;
+            if (props == null) return;
+            for (int i = 0; i < props.Length; i++) WrapCallback(props[i], wrapped);
+        }
+
+        internal static void EndMenuOperation(List<SavedCallback> wrapped)
+        {
+            if (wrapped != null) RestoreCallbacks(wrapped);
+            s_MenuOperation = false;
+            s_ConsumedTargets.Clear();
+            s_DirectTargets.Clear();
+        }
+
+        internal static void NoteDirectWrite(Object target)
+        {
+            if (target != null) s_DirectTargets.Add(target.GetInstanceID());
+        }
+
+        internal static bool TargetWroteAsset(Object target)
+        {
+            return target != null && s_DirectTargets.Contains(target.GetInstanceID());
         }
 
         private static void DrawVersionFoldout()

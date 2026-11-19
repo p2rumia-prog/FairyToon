@@ -62,8 +62,12 @@ for (const line of writes)
   if (!clipCs.includes(line)) errors.push('clipboard no longer writes ' + line);
 if (!clipCs.includes('Undo.IncrementCurrentGroup()'))
   errors.push('paste undo must start its own group');
-if (!pasteFn.includes('Undo.RecordObject(material, undo)'))
-  errors.push('callback-context _ST paste must record its own undo');
+if (pasteFn.includes('Undo.IncrementCurrentGroup'))
+  errors.push('one paste must not open a new undo group per texture scale');
+if (!pasteFn.includes('BeginUndo(editor, undo)'))
+  errors.push('paste must record one undo group before it writes');
+if (!pasteFn.includes('NoteDirectWrite(material)'))
+  errors.push('a texture scale write must count as an asset write');
 if (!pasteFn.includes('ApplyValue(dest, source)'))
   errors.push('Paste must call ApplyValue');
 if (!resetFn.includes('ApplyDefault(prop, shader, index)'))
