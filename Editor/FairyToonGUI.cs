@@ -529,8 +529,8 @@ namespace NW.FairyToon.Editor
                 ? SearchAllows("_MainTex", "_Color")
                 : SearchAllows("_MainTex", "_Color", "_MainTexHSVG", "_MainColorAdjustMask");
             bool alpha = SearchAllows("_AlphaMaskMode", "_AlphaMask", "_AlphaMaskScale", "_AlphaMaskValue", "_Cutoff", "|sAlphaMaskWarnOpaque", "|ft.AlphaMaskInvert", "|ft.AlphaMaskTransparency", "|ft.AlphaMaskAdvanced");
-            bool second = PrefixMatches("_Main2nd") || PrefixMatches("_FT_Main2nd") || SearchAllows("_Color2nd", "_UseMain2ndTex", "|UV Line Angle (radians)");
-            bool third = PrefixMatches("_Main3rd") || PrefixMatches("_FT_Main3rd") || SearchAllows("_Color3rd", "_UseMain3rdTex", "|UV Line Angle (radians)");
+            bool second = PrefixMatches("_Main2nd") || PrefixMatches("_FT_Main2nd") || SearchAllows("_Color2nd", "_UseMain2ndTex", "|UV Line Angle (radians)", "|Decal", "|sMirrorMode", "|sCopyMode");
+            bool third = PrefixMatches("_Main3rd") || PrefixMatches("_FT_Main3rd") || SearchAllows("_Color3rd", "_UseMain3rdTex", "|UV Line Angle (radians)", "|Decal", "|sMirrorMode", "|sCopyMode");
             if (Searching && !first && !alpha && !second && !third) return;
             if (!BeginSection("Main", "sMainColorSetting", null, true, PropertyBlock.MainColor)) return;
             if (first) MainColorFirst();
@@ -646,21 +646,103 @@ namespace NW.FairyToon.Editor
             P(prefix + "Tex_ScrollRotate", "Scroll XY / Rotation Speed W");
             P(prefix + "TexAlphaMode", "Alpha Mode");
             P(prefix + "Tex_Cull", "Layer Cull");
-            string decalKey = PrefsPrefix + "Foldout.Decal" + layer;
-            bool decal = EditorGUILayout.Foldout(EditorPrefs.GetBool(decalKey, false), FairyToonL10n.Text("Decal"), true);
-            if (decal != EditorPrefs.GetBool(decalKey, false)) EditorPrefs.SetBool(decalKey, decal);
-            if (decal || Searching)
-            {
-                P(prefix + "TexIsDecal", "Decal");
-                P(prefix + "TexIsLeftOnly", "Left Only");
-                P(prefix + "TexIsRightOnly", "Right Only");
-                P(prefix + "TexShouldCopy", "Copy");
-                P(prefix + "TexShouldFlipMirror", "Flip Mirror");
-                P(prefix + "TexShouldFlipCopy", "Flip Copy");
-                P(prefix + "TexIsMSDF", "MSDF");
-            }
+            DrawDecal(prefix);
+            P(prefix + "TexIsMSDF", "MSDF");
             if (!EverySelectedIsGem()) DissolveControls(prefix + "Dissolve", false);
             EndSection();
+        }
+
+        // lilToon UV4Decal: one Decal toggle, then Mirror Mode and Copy Mode. Turning Decal off clears the five flags.
+        private void DrawDecal(string prefix)
+        {
+            var isDecal = Prop(prefix + "TexIsDecal");
+            var left = Prop(prefix + "TexIsLeftOnly");
+            var right = Prop(prefix + "TexIsRightOnly");
+            var copy = Prop(prefix + "TexShouldCopy");
+            var flipMirror = Prop(prefix + "TexShouldFlipMirror");
+            var flipCopy = Prop(prefix + "TexShouldFlipCopy");
+            if (isDecal == null || left == null || right == null || copy == null || flipMirror == null || flipCopy == null) return;
+            if (!Searching || RowVisible(isDecal.name, "Decal"))
+            {
+                Rect row = EditorGUILayout.GetControlRect();
+                BeginScope(row, isDecal);
+                EditorGUI.showMixedValue = isDecal.hasMixedValue;
+                EditorGUI.BeginChangeCheck();
+                bool on = EditorGUI.Toggle(row, FairyToonL10n.Text("Decal"), Number(isDecal) > 0.5f);
+                if (EditorGUI.EndChangeCheck())
+                {
+                    SetNumber(isDecal, on ? 1f : 0f);
+                    if (!on)
+                    {
+                        SetNumber(left, 0f);
+                        SetNumber(right, 0f);
+                        SetNumber(flipMirror, 0f);
+                        SetNumber(copy, 0f);
+                        SetNumber(flipCopy, 0f);
+                    }
+                }
+                EditorGUI.showMixedValue = false;
+                EndScope();
+            }
+            if (!isDecal.hasMixedValue && Number(isDecal) <= 0.5f) return;
+            DrawMirrorMode(left, right, flipMirror);
+            DrawCopyMode(copy, flipCopy);
+        }
+
+        private void DrawMirrorMode(MaterialProperty left, MaterialProperty right, MaterialProperty flip)
+        {
+            string label = Event.current.alt
+                ? left.name + ", " + right.name + ", " + flip.name
+                : FairyToonL10n.Text("sMirrorMode");
+            if (Searching && !Hit(label)) return;
+            bool mixed = left.hasMixedValue || right.hasMixedValue || flip.hasMixedValue;
+            int mode = 0;
+            if (!mixed)
+            {
+                if (Number(right) > 0.5f) mode = 3;
+                if (Number(flip) > 0.5f) mode++;
+                if (Number(left) > 0.5f) mode = 2;
+            }
+            EditorGUI.showMixedValue = mixed;
+            EditorGUI.BeginChangeCheck();
+            int next = EditorGUILayout.Popup(label, mixed ? -1 : mode, new[]
+            {
+                FairyToonL10n.Text("sMirrorModeNormal"),
+                FairyToonL10n.Text("sMirrorModeFlip"),
+                FairyToonL10n.Text("sMirrorModeLeft"),
+                FairyToonL10n.Text("sMirrorModeRight"),
+                FairyToonL10n.Text("sMirrorModeRightFlip")
+            });
+            EditorGUI.showMixedValue = false;
+            if (!EditorGUI.EndChangeCheck() || next < 0) return;
+            SetNumber(left, next == 2 ? 1f : 0f);
+            SetNumber(right, next >= 3 ? 1f : 0f);
+            SetNumber(flip, next == 1 || next == 4 ? 1f : 0f);
+        }
+
+        private void DrawCopyMode(MaterialProperty copy, MaterialProperty flipCopy)
+        {
+            string label = Event.current.alt ? copy.name + ", " + flipCopy.name : FairyToonL10n.Text("sCopyMode");
+            if (Searching && !Hit(label)) return;
+            bool mixed = copy.hasMixedValue || flipCopy.hasMixedValue;
+            int mode = 0;
+            if (!mixed)
+            {
+                if (Number(copy) > 0.5f) mode = 1;
+                if (Number(flipCopy) > 0.5f) mode = 2;
+            }
+            EditorGUI.showMixedValue = mixed;
+            EditorGUI.BeginChangeCheck();
+            int next = EditorGUILayout.Popup(label, mixed ? -1 : mode, new[]
+            {
+                FairyToonL10n.Text("sCopyModeNormal"),
+                FairyToonL10n.Text("sCopyModeSymmetry"),
+                FairyToonL10n.Text("sCopyModeFlip")
+            });
+            EditorGUI.showMixedValue = false;
+            if (!EditorGUI.EndChangeCheck() || next < 0) return;
+            SetNumber(copy, next == 0 ? 0f : 1f);
+            SetNumber(flipCopy, next == 2 ? 1f : 0f);
         }
 
         // Root dissolve is an advanced section after Outline and before Refraction/Fur, as in lilToon.
