@@ -2391,7 +2391,7 @@ namespace NW.FairyToon.Editor
             bool changeScaleY = DecalSlider(tex, tex.name + "_ST.y", "sScaleY", scaleY, -1f, 1f, ref nextScaleY);
             if (!changeX && !changeY && !changeScaleX && !changeScaleY) return;
             Vector4 proposed = DecalVector(st, copyMode, changeX, changeY, changeScaleX, changeScaleY, nextX, nextY, nextScaleX, nextScaleY);
-            int editedMask = (changeX || changeScaleX ? 1 | 4 : 0) | (changeY || changeScaleY ? 2 | 8 : 0);
+            int editedMask = (changeScaleX ? 1 : 0) | (changeScaleY ? 2 : 0) | (changeX || changeScaleX ? 4 : 0) | (changeY || changeScaleY ? 8 : 0);
             if (OfferTextureScale(tex, proposed, editedMask)) return;
             if (tex.targets == null) return;
             Undo.IncrementCurrentGroup();
@@ -2424,6 +2424,7 @@ namespace NW.FairyToon.Editor
             if (changeY) posY = nextY;
             if (changeScaleX) scaleX = nextScaleX;
             if (changeScaleY) scaleY = nextScaleY;
+            if (changeX && copyMode > 0 && posX < 0.5f) posX = 1f - posX;
             Vector4 next = stored;
             if (changeX || changeScaleX) EncodeDecalAxis(posX, scaleX, out next.x, out next.z);
             if (changeY || changeScaleY) EncodeDecalAxis(posY, scaleY, out next.y, out next.w);
@@ -2934,10 +2935,43 @@ namespace NW.FairyToon.Editor
                 scaleRow ? new Vector2(st.x, st.y) : new Vector2(st.z, st.w));
             if (EditorGUI.EndChangeCheck())
             {
-                Vector4 next = tex.textureScaleAndOffset;
-                if (scaleRow) { next.x = edited.x; next.y = edited.y; }
-                else { next.z = edited.x; next.w = edited.y; }
-                tex.textureScaleAndOffset = next;
+                Vector4 current = tex.textureScaleAndOffset;
+                Vector4 next = current;
+                int mask = 0;
+                bool mixed = TextureAxesDiffer(tex, scaleRow);
+                if (scaleRow)
+                {
+                    if (mixed || !Mathf.Approximately(edited.x, current.x)) { next.x = edited.x; mask |= 1; }
+                    if (mixed || !Mathf.Approximately(edited.y, current.y)) { next.y = edited.y; mask |= 2; }
+                }
+                else
+                {
+                    if (mixed || !Mathf.Approximately(edited.x, current.z)) { next.z = edited.x; mask |= 4; }
+                    if (mixed || !Mathf.Approximately(edited.y, current.w)) { next.w = edited.y; mask |= 8; }
+                }
+                if (mask != 0 && !OfferTextureScale(tex, next, mask) && tex.targets != null)
+                {
+                Undo.IncrementCurrentGroup();
+                int group = Undo.GetCurrentGroup();
+                try
+                {
+                    foreach (Object target in tex.targets)
+                    {
+                        var material = target as Material;
+                        if (material == null || !material.HasProperty(tex.name) || Locked(material, tex.name + "_ST")) continue;
+                        Vector4 stored = material.GetVector(tex.name + "_ST");
+                        Vector4 merged = stored;
+                        if ((mask & 1) != 0) merged.x = edited.x;
+                        if ((mask & 2) != 0) merged.y = edited.y;
+                        if ((mask & 4) != 0) merged.z = edited.x;
+                        if ((mask & 8) != 0) merged.w = edited.y;
+                        if (merged == stored) continue;
+                        Undo.RecordObject(material, "Modify UV");
+                        material.SetVector(tex.name + "_ST", merged);
+                    }
+                }
+                finally { Undo.CollapseUndoOperations(group); }
+                }
             }
             EditorGUI.showMixedValue = false;
             EndScope();
