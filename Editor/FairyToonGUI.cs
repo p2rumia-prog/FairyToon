@@ -2015,12 +2015,20 @@ namespace NW.FairyToon.Editor
             {
             EditorGUILayout.LabelField(FairyToonL10n.Text("sGem"), EditorStyles.boldLabel);
             EditorGUI.indentLevel++;
-            P("_GemChromaticAberration", "sChromaticAberration");
-            P("_GemEnvContrast", "sContrast");
-            P("_GemEnvColor", "sEnvironmentColor");
-            Separator();
-            P("_GemParticleLoop", "sParticleLoop");
-            P("_GemParticleColor", "sColor");
+            bool gemEnv = !Searching || RowVisible("_GemChromaticAberration", "sChromaticAberration") || RowVisible("_GemEnvContrast", "sContrast") || RowVisible("_GemEnvColor", "sEnvironmentColor");
+            bool gemParticle = !Searching || RowVisible("_GemParticleLoop", "sParticleLoop") || RowVisible("_GemParticleColor", "sColor");
+            if (gemEnv)
+            {
+                P("_GemChromaticAberration", "sChromaticAberration");
+                P("_GemEnvContrast", "sContrast");
+                P("_GemEnvColor", "sEnvironmentColor");
+            }
+            if (gemEnv && gemParticle) Separator();
+            if (gemParticle)
+            {
+                P("_GemParticleLoop", "sParticleLoop");
+                P("_GemParticleColor", "sColor");
+            }
             EditorGUI.indentLevel--;
             }
             if (!Searching || RowVisible("_GemVRParallaxStrength", "sVRParallaxStrength") || RowVisible("_SmoothnessTex", "sSmoothness") || RowVisible("_Reflectance", "sReflectance"))
