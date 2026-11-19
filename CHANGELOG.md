@@ -2,6 +2,8 @@
 
 ## 0.2.1
 
+- Transparent hair converted to Cutout moves out of the transparent queue. Reset UV on Main 2nd/3rd respects animation preview and groups asset edits into one Undo. The first TwoPass Fur shell starts with depth writes and alpha to coverage enabled.
+
 - The inspector now follows lilToon's section boxes, HDR swatch, and shared en/ja/zh-Hans labels where the shader has the property.
 - Keyword sync is per material for the write that just happened. Paste and Reset use one undo group and ignore a texture scale when that texture property is absent. From Shader keeps render queue -1. Dissolve edits keep the other vector components. Decal uses Mirror Mode and Copy Mode.
 - Inspector layout follows lilToon 2.4.1 where the shader has the property: version and help foldouts, rendering mode under search, feature toggles inside the section, nested shadow and rendering boxes, MatCap order, and blend-mode labels. Sections the shader does not implement stay absent. FairyToon-only sections stay.

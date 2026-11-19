@@ -1497,11 +1497,11 @@ namespace NW.FairyToon.Editor
             var scope = Prop(name);
             if (scope == null || !RowVisible(name, label)) return;
             Rect row = EditorGUILayout.GetControlRect();
+            bool previousMixed = EditorGUI.showMixedValue;
             BeginScope(row, scope);
             try
             {
             Rect values = EditorGUI.PrefixLabel(row, new GUIContent(FairyToonL10n.Text(label)));
-            bool previousMixed = EditorGUI.showMixedValue;
             using (var axes = new AxisFieldScope(values, dimensions))
             {
                 for (int component = 0; component < dimensions; component++)
@@ -1515,9 +1515,12 @@ namespace NW.FairyToon.Editor
                     if (EditorGUI.EndChangeCheck()) SetDissolveComponents(property, value, 1 << component);
                 }
             }
-            EditorGUI.showMixedValue = previousMixed;
             }
-            finally { EndScope(); }
+            finally
+            {
+                EditorGUI.showMixedValue = previousMixed;
+                EndScope();
+            }
         }
         private static bool DissolveComponentMixed(MaterialProperty property, int component)
         {
@@ -3401,31 +3404,39 @@ namespace NW.FairyToon.Editor
                 Rect resetRow = EditorGUILayout.GetControlRect(false, 18f);
                 if (GUI.Button(resetRow, FairyToonL10n.Text("sReset"))
                     && EditorUtility.DisplayDialog("Reset UV", "Reset UV and Decal settings for this layer?", "Reset", "Cancel"))
-                    ResetLayerUv(name);
+                    ResetLayerUv(m_Props, name);
             }
         }
 
-        private void ResetLayerUv(string scrollName)
+        internal static void ResetLayerUv(MaterialProperty[] properties, string scrollName)
         {
             string tex = scrollName.EndsWith("_ScrollRotate", StringComparison.Ordinal)
                 ? scrollName.Substring(0, scrollName.Length - "_ScrollRotate".Length)
                 : scrollName;
-            Undo.RecordObjects(m_Editor.targets, "Reset UV");
-            foreach (Object target in m_Editor.targets)
+            Undo.IncrementCurrentGroup();
+            int group = Undo.GetCurrentGroup();
+            Undo.SetCurrentGroupName("Reset UV");
+            try
             {
-                var material = target as Material;
-                if (material == null) continue;
-                if (material.HasProperty(scrollName)) material.SetVector(scrollName, Vector4.zero);
-                if (material.HasProperty(tex + "Angle")) material.SetFloat(tex + "Angle", 0f);
-                if (material.HasProperty(tex + "_UVMode")) material.SetFloat(tex + "_UVMode", 0f);
-                foreach (string suffix in new[] { "IsDecal", "IsLeftOnly", "IsRightOnly", "ShouldCopy", "ShouldFlipMirror", "ShouldFlipCopy" })
-                    if (material.HasProperty(tex + suffix)) material.SetFloat(tex + suffix, 0f);
-                if (material.HasProperty(tex))
+                // Use the descriptors supplied by the inspector so animation can own each write independently.
+                var scroll = FindProperty(scrollName, properties, false);
+                if (scroll != null) scroll.vectorValue = Vector4.zero;
+                foreach (string suffix in new[] { "Angle", "_UVMode", "IsDecal", "IsLeftOnly", "IsRightOnly", "ShouldCopy", "ShouldFlipMirror", "ShouldFlipCopy" })
+                    SetNumber(FindProperty(tex + suffix, properties, false), 0f);
+
+                var texture = FindProperty(tex, properties, false);
+                if (texture == null || OfferTextureScale(texture, new Vector4(1f, 1f, 0f, 0f), 30)) return;
+                // The first target can already have identity ST while another selected material differs.
+                foreach (Object target in texture.targets)
                 {
+                    if (!(target is Material material) || !material.HasProperty(tex) || Locked(material, tex + "_ST")) continue;
+                    if (material.GetTextureScale(tex).Equals(Vector2.one) && material.GetTextureOffset(tex).Equals(Vector2.zero)) continue;
+                    Undo.RecordObject(material, "Reset UV");
                     material.SetTextureScale(tex, Vector2.one);
                     material.SetTextureOffset(tex, Vector2.zero);
                 }
             }
+            finally { Undo.CollapseUndoOperations(group); }
         }
 
         private void AngleSlider(string name)

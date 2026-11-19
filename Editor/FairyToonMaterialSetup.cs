@@ -152,12 +152,12 @@ namespace NW.FairyToon.Editor
             return true;
         }
 
-        // Cutout shells write depth and mask. Transparent and two-pass shells do not. Ordinary Apply leaves a later edit alone.
+        // The Cutout shell and the TwoPass first shell write depth and alpha to coverage.
         internal static void SetFurShellDefaults(Material material, int furMode)
         {
-            bool cutout = furMode == FurCutout;
-            if (material.HasProperty("_FurZWrite")) material.SetFloat("_FurZWrite", cutout ? 1f : 0f);
-            if (material.HasProperty("_FurAlphaToMask")) material.SetFloat("_FurAlphaToMask", cutout ? 1f : 0f);
+            bool writeShellDepth = furMode == FurCutout || furMode == FurTwoPass;
+            if (material.HasProperty("_FurZWrite")) material.SetFloat("_FurZWrite", writeShellDepth ? 1f : 0f);
+            if (material.HasProperty("_FurAlphaToMask")) material.SetFloat("_FurAlphaToMask", writeShellDepth ? 1f : 0f);
             if (material.HasProperty("_FurSrcBlend"))
                 material.SetInt("_FurSrcBlend", furMode == FurTransparent ? (int)BlendMode.SrcAlpha : (int)BlendMode.One);
             if (material.HasProperty("_FurDstBlend"))

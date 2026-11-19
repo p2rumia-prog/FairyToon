@@ -259,7 +259,7 @@ Limits: Forward / Forward+ only (in Deferred `UniversalForwardOnly` is the main 
 ## lilToon converter
 
 - **Assets > FairyToon > Convert lilToon Material (copy / in place)** on materials, folders, prefabs or models. Copies go to `<source folder>/FairyToon/<name>.mat` and are refreshed on re-run; in place records Undo. **Tools > FairyToon > Convert lilToon Materials…** adds an output folder, the options and the last report.
-- Transparent variants with "hair" in the material name become Cutout + alpha to coverage (`_Cutoff` 0.5); on by default, a window option.
+- By default, transparent variants with "hair" in the material name convert to Cutout with alpha to coverage and `_Cutoff` 0.5. Queues above 2500 move to 2450. Existing opaque-range ordering such as 2460 is preserved.
 - **Convert Profile** (Create > FairyToon > Convert Profile): per-material overrides for what the lilToon material cannot carry, such as a face SDF painted later. Entries reference the source material; every profile in the project is applied, the window's profile last.
 - Each batch writes `Logs/FairyToonConvert.md`: unsupported features in use, non-default values dropped (only for features that are on), applied heuristics and profile overrides.
 
@@ -565,7 +565,7 @@ Properties absent from a source variant use FairyToon's shader defaults; profile
 | Gem | Separate scene-colour dispersion, cubemap / probe reflection and particle path; copied reflection switches are retained rather than forced on. |
 | Keywords | Clear source keywords; rebuild from FairyToon properties through `FairyToonMaterialSetup.Apply`. |
 | Blend / depth | Rendering setup derives `_SrcBlend`, `_DstBlend`, `_SrcBlendAlpha`, `_DstBlendAlpha`; Opaque / Cutout force `_ZWrite = 1`; Transparent preserves copied `_ZWrite`. `_AlphaToMask` is preserved only for Cutout. |
-| Queue / tags | Conversion copies the effective lilToon queue before Apply. Transparent moves inherited 2000/2450 to 3000, and 2460 only when prior FairyToon Hair assignment is known; authored lilToon Transparent 2460 and 2461?2466 remain. Opaque / Cutout queues above 2500 return to 2000 / 2450. A private `FairyToonManagedHairQueue` tag records automatic Hair 2460 ownership; legacy fallback uses prior nontransparent Hair pass state, and conversion explicitly clears that ownership. Raw queue -1 derives the shader default. Explicit Rendering Mode / Fur Mode transitions migrate canonical defaults. Refraction / Gem / Fur retain their separate queue rules; RenderType follows coverage. |
+| Queue / tags | Conversion copies the effective lilToon queue. Converting transparent hair to Cutout moves queues above 2500 to 2450. An authored 2460 is preserved. A private `FairyToonManagedHairQueue` tag tracks automatic Hair ordering. Conversion clears that ownership. Explicit Rendering Mode / Fur Mode changes migrate canonical defaults. RenderType follows coverage. |
 | Passes | Opaque / Cutout and all Fur modes enable body DepthOnly / DepthNormals / MotionVectors; ordinary Transparent and optical variants disable them. Fur keeps body shadow passes; optical variants disable shadows. Fur body and Gem PRE own SRPDefaultUnlit; other modes derive outline enablement. |
 
 Not converted:
@@ -666,7 +666,7 @@ Reflection scalar values remain serialized unchanged: lilToon's `[Gamma]` flags 
 
 Toon and Endfield both use URP position-aware probe blending, box projection and atlas lookup. Only nonclustered Toon retains the lilToon empty-legacy-probe custom-cube fallback; an explicit custom-cube override works in every path. Endfield retains its own environment BRDF and ambient multiplier. Optional shared Reflection layers use the corrected reflectance and cubemap sampling in either model. No material reconversion is needed for these shader fixes. See [SleeveParityAudit.md](Tests~/SleeveParityAudit.md) for material-specific arithmetic, source locations and remaining visual checks. Run `node Packages/com.nw.fairytoon/Tests~/VerifyLayers.cjs` for offline regressions; `Tests~/CompileShaders.ps1` also accepts `-ColorSpace Gamma` and `-NativeHDR`. These do not validate Unity import or GPU output.
 
-For scripted mode changes, use `FairyToonMaterialSetup.SetRenderingMode` / `SetFurMode`. To explicitly request a fresh mode default, set `material.renderQueue = -1` before `Apply`; direct property changes followed by `Apply` retain authored draw order subject to coverage repair: Transparent inherited 2000/2450/managed Hair 2460 moves to 3000, and Opaque/Cutout queues above 2500 move to 2000/2450. The existing See-through Hair rule still enforces a minimum of 2460 for opaque/cutout hair so role edits retain stencil ordering; special variants have no See-through passes and bypass that rule.
+For scripted mode changes, use `FairyToonMaterialSetup.SetRenderingMode` or `SetFurMode`. Explicit transitions migrate canonical default queues. Ordinary `Apply` preserves From Shader (raw queue -1) and explicit queues. Opaque/Cutout See-through Hair raises explicit queues below 2460 to its managed slot. Special variants bypass the See-through passes.
 
 ## Mermaid parity
 
