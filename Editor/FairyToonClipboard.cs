@@ -180,7 +180,7 @@ namespace NW.FairyToon.Editor
                         if (!(callback && !FairyToonGUI.WroteAsset))
                         {
                             MigrateCoverage(coverage);
-                            ApplyMaterials(editor);
+                            ApplyMaterials(editor, coverage);
                         }
                     }
                 }
@@ -290,6 +290,7 @@ namespace NW.FairyToon.Editor
 
         private static void ApplyDefault(MaterialProperty prop, Shader shader, int index)
         {
+            FairyToonGUI.NoteExplicitProperty(prop.name);
             switch (prop.propertyType)
             {
                 case ShaderPropertyType.Color:
@@ -320,19 +321,24 @@ namespace NW.FairyToon.Editor
             {
                 case ShaderPropertyType.Color:
                     dest.colorValue = source.colorValue;
+                    FairyToonGUI.NoteExplicitProperty(dest.name);
                     break;
                 case ShaderPropertyType.Vector:
                     dest.vectorValue = source.vectorValue;
+                    FairyToonGUI.NoteExplicitProperty(dest.name);
                     break;
                 case ShaderPropertyType.Float:
                 case ShaderPropertyType.Range:
                     dest.floatValue = source.floatValue;
+                    FairyToonGUI.NoteExplicitProperty(dest.name);
                     break;
                 case ShaderPropertyType.Int:
                     dest.intValue = source.intValue;
+                    FairyToonGUI.NoteExplicitProperty(dest.name);
                     break;
                 case ShaderPropertyType.Texture:
                     dest.textureValue = source.textureValue;
+                    FairyToonGUI.NoteExplicitProperty(dest.name);
                     break;
                 default:
                     throw new InvalidOperationException("Unhandled shader property type " + dest.propertyType);
@@ -343,6 +349,7 @@ namespace NW.FairyToon.Editor
         {
             public Material Material;
             public int Mode;
+            public int Transparent;
             public int Queue;
             public int RawQueue;
         }
@@ -358,6 +365,7 @@ namespace NW.FairyToon.Editor
                 {
                     Material = material,
                     Mode = FairyToonMaterialSetup.GetRenderingMode(material),
+                    Transparent = material.HasProperty("_TransparentMode") ? Mathf.RoundToInt(material.GetFloat("_TransparentMode")) : FairyToonMaterialSetup.GetRenderingMode(material),
                     Queue = material.renderQueue,
                     RawQueue = material.rawRenderQueue
                 });
@@ -399,11 +407,24 @@ namespace NW.FairyToon.Editor
             return group;
         }
 
-        private static void ApplyMaterials(MaterialEditor editor)
+        private static void ApplyMaterials(MaterialEditor editor, List<CoverageSnapshot> coverage)
         {
             foreach (UnityEngine.Object target in editor.targets)
-                if (FairyToonGUI.TargetWroteAsset(target))
-                    FairyToonMaterialSetup.Apply(target as Material, false);
+            {
+                if (!FairyToonGUI.TargetWroteAsset(target)) continue;
+                var material = target as Material;
+                int previous = -1;
+                if (coverage != null)
+                    for (int i = 0; i < coverage.Count; i++)
+                        if (coverage[i].Material == material) previous = coverage[i].Transparent;
+                FairyToonMaterialSetup.Apply(material, false);
+                int current = material != null && material.HasProperty("_TransparentMode")
+                    ? Mathf.RoundToInt(material.GetFloat("_TransparentMode")) : previous;
+                bool blendsExplicit = FairyToonGUI.ExplicitProperty("_SrcBlend") || FairyToonGUI.ExplicitProperty("_DstBlend")
+                    || FairyToonGUI.ExplicitProperty("_SrcBlendAlpha") || FairyToonGUI.ExplicitProperty("_DstBlendAlpha");
+                if (material != null && previous >= 0 && current != previous && !blendsExplicit)
+                    FairyToonMaterialSetup.SetCoverageBlends(material);
+            }
             editor.PropertiesChanged();
         }
     }

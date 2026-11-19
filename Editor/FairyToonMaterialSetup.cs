@@ -166,6 +166,41 @@ namespace NW.FairyToon.Editor
             if (material.HasProperty("_FurDstBlendAlpha")) material.SetInt("_FurDstBlendAlpha", (int)BlendMode.OneMinusSrcAlpha);
         }
 
+        internal static void SetCoverageBlends(Material material)
+        {
+            if (material == null || !IsFairyToonShader(material.shader)) return;
+            int mode = Mathf.RoundToInt(Get(material, "_TransparentMode"));
+            bool gem = GetRenderingMode(material) == Gem;
+            bool fur = GetRenderingMode(material) == Fur;
+            int furMode = Mathf.Clamp(Mathf.RoundToInt(Get(material, "_FurMode")), FurTransparent, FurTwoPass);
+            if (gem)
+            {
+                material.SetInt("_SrcBlend", (int)BlendMode.One);
+                material.SetInt("_DstBlend", (int)BlendMode.One);
+                return;
+            }
+            if (fur)
+            {
+                material.SetInt("_SrcBlend", furMode == FurTransparent || mode == Transparent ? (int)BlendMode.SrcAlpha : (int)BlendMode.One);
+                material.SetInt("_DstBlend", furMode == FurTransparent || mode == Transparent ? (int)BlendMode.OneMinusSrcAlpha : (int)BlendMode.Zero);
+                material.SetInt("_SrcBlendAlpha", (int)BlendMode.One);
+                material.SetInt("_DstBlendAlpha", (int)BlendMode.OneMinusSrcAlpha);
+                return;
+            }
+            if (mode == Transparent)
+            {
+                material.SetInt("_SrcBlend", (int)BlendMode.SrcAlpha);
+                material.SetInt("_DstBlend", (int)BlendMode.OneMinusSrcAlpha);
+                material.SetInt("_SrcBlendAlpha", (int)BlendMode.One);
+                material.SetInt("_DstBlendAlpha", (int)BlendMode.OneMinusSrcAlpha);
+                return;
+            }
+            material.SetInt("_SrcBlend", (int)BlendMode.One);
+            material.SetInt("_DstBlend", (int)BlendMode.Zero);
+            material.SetInt("_SrcBlendAlpha", (int)BlendMode.One);
+            material.SetInt("_DstBlendAlpha", (int)BlendMode.Zero);
+        }
+
         public static void Apply(Material material, bool writeCoverageBlends = true)
         {
             if (material == null || !IsFairyToonShader(material.shader)) return;
