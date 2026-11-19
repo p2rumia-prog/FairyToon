@@ -22,34 +22,28 @@ namespace NW.FairyToon.Editor
 
         // Same layout as lilToon's lilHDRDrawer: a 50px colour field (eyedropper and HDR badge included)
         // and a 50px hex field beside it. An 18px rect is too narrow for the eyedropper.
-        internal static bool Draw(Rect position, string label, ref Color value, Rect hexLine = default)
+        internal static bool Draw(Rect position, string label, ref Color value, Rect hexLine = default, bool wrapped = false)
         {
-            float xMax = position.xMax;
             bool labeled = !string.IsNullOrEmpty(label);
             float labelWidth = labeled ? EditorGUIUtility.labelWidth : 0f;
             const float gap = 4f;
             const float swatch = 50f;
             const float hexWidth = 72f;
             Rect hexRect;
-            if (hexLine.width >= swatch + gap + hexWidth)
+            // wrapped is chosen before any control rect is measured, so Layout and Repaint take the same path.
+            if (wrapped)
             {
                 if (labeled) EditorGUI.LabelField(position, label);
                 float x = hexLine.x;
-                if (labeled) x += labelWidth;
-                if (x + swatch + gap + hexWidth > hexLine.xMax) x = hexLine.x;
-                position = new Rect(x, hexLine.y, swatch, hexLine.height);
-                hexRect = new Rect(position.xMax + gap, hexLine.y, hexWidth, hexLine.height);
+                if (labeled && x + labelWidth + swatch + gap + hexWidth <= hexLine.xMax) x += labelWidth;
+                position = new Rect(x, hexLine.y, swatch, hexLine.height > 1f ? hexLine.height : EditorGUIUtility.singleLineHeight);
+                hexRect = new Rect(position.xMax + gap, position.y, hexWidth, position.height);
                 labeled = false;
             }
             else
             {
-                float room = Mathf.Max(0f, xMax - position.x - labelWidth);
-                float colorWidth = room >= swatch ? swatch : Mathf.Max(0f, room);
-                position.width = labelWidth + colorWidth;
-                float hexX = position.xMax + gap;
-                hexRect = hexX + hexWidth <= xMax
-                    ? new Rect(hexX, position.y, hexWidth, position.height)
-                    : default;
+                position.width = labelWidth + swatch;
+                hexRect = new Rect(position.xMax + gap, position.y, hexWidth, position.height > 1f ? position.height : EditorGUIUtility.singleLineHeight);
             }
             float intensity = value.maxColorComponent > 1f ? value.maxColorComponent : 1f;
             EditorGUI.BeginChangeCheck();
@@ -60,7 +54,7 @@ namespace NW.FairyToon.Editor
             string hex = ColorUtility.ToHtmlStringRGB(unit);
             int indent = EditorGUI.indentLevel;
             EditorGUI.indentLevel = 0;
-            if (hexRect.width >= hexWidth) hex = EditorGUI.TextField(hexRect, GUIContent.none, hex);
+            hex = EditorGUI.TextField(hexRect, GUIContent.none, hex);
             EditorGUI.indentLevel = indent;
             bool hexChanged = EditorGUI.EndChangeCheck();
             if (hexChanged)
@@ -102,6 +96,7 @@ namespace NW.FairyToon.Editor
         private static GUIStyle s_InnerFull;
         private static GUIStyle s_Custom;
         private static GUIStyle s_Foldout;
+        private Rect m_TextureRow;
         private static GUIStyle s_Gear;
         private static Color s_Line;
         private bool m_AlphaMaskAdvanced;
@@ -742,7 +737,9 @@ namespace NW.FairyToon.Editor
             bool opaque = PrimaryMode() == FairyToonMaterialSetup.Opaque && !mixedCoverage;
             if (opaque)
             {
-                EditorGUILayout.LabelField(FairyToonL10n.Text("sAlphaMaskWarnOpaque"), EditorStyles.wordWrappedLabel);
+                string warning = FairyToonL10n.Text("sAlphaMaskWarnOpaque");
+                if (!Searching || HitIgnore(warning) || HitIgnore("Alpha Mask"))
+                    EditorGUILayout.LabelField(warning, EditorStyles.wordWrappedLabel);
                 return;
             }
             if (!OpenBox(FairyToonL10n.Text("sAlphaMask"), null, PropertyBlock.AlphaMask)) return;
@@ -757,15 +754,15 @@ namespace NW.FairyToon.Editor
                 if (scale != null && offset != null)
                 {
                     // Alt shows the real property names, as lilToon does. Ordinary search uses each control's own label.
-                    string invertLabel = Event.current.alt ? scale.name : FairyToonL10n.Text("ft.AlphaMaskInvert");
-                    string transparencyLabel = Event.current.alt
-                        ? scale.name + ", " + offset.name
-                        : FairyToonL10n.Text("ft.AlphaMaskTransparency");
+                    string invertShown = FairyToonL10n.Text("ft.AlphaMaskInvert");
+                    string transparencyShown = FairyToonL10n.Text("ft.AlphaMaskTransparency");
+                    string invertLabel = Event.current.alt ? scale.name : invertShown;
+                    string transparencyLabel = Event.current.alt ? scale.name + ", " + offset.name : transparencyShown;
                     bool invert = Number(scale) < 0f;
                     float transparency = Number(offset) - (invert ? 1f : 0f);
                     bool invertChanged = false;
                     bool transparencyChanged = false;
-                    if (!Searching || Hit(invertLabel))
+                    if (!Searching || HitIgnore(invertShown) || HitIgnore(scale.name))
                     {
                         Rect row = EditorGUILayout.GetControlRect();
                         BeginScope(row, scale);
@@ -784,7 +781,7 @@ namespace NW.FairyToon.Editor
                             EndScope();
                         }
                     }
-                    if (!Searching || Hit(transparencyLabel))
+                    if (!Searching || HitIgnore(transparencyShown) || HitIgnore(offset.name))
                     {
                         Rect row = EditorGUILayout.GetControlRect();
                         BeginScope(row, offset);
@@ -805,10 +802,11 @@ namespace NW.FairyToon.Editor
                         WriteAlphaMask(scale, offset, invertChanged, transparencyChanged, invert, transparency);
                 }
                 if (Prop("_Cutoff") != null) P("_Cutoff");
-                string advancedLabel = Event.current.alt ? "_AlphaMaskScale, _AlphaMaskValue" : FairyToonL10n.Text("ft.AlphaMaskAdvanced");
+                string advancedShown = FairyToonL10n.Text("ft.AlphaMaskAdvanced");
+                string advancedLabel = Event.current.alt ? "_AlphaMaskScale, _AlphaMaskValue" : advancedShown;
                 bool namedScale = Phrase("Alpha Mask Scale") || HitIgnore("_AlphaMaskScale");
                 bool namedOffset = Phrase("Alpha Mask Offset") || HitIgnore("_AlphaMaskValue");
-                bool showAdvanced = !Searching || namedScale || namedOffset || Hit(advancedLabel) || HitIgnore("_AlphaMaskScale") || HitIgnore("_AlphaMaskValue");
+                bool showAdvanced = !Searching || namedScale || namedOffset || HitIgnore(advancedShown) || HitIgnore("_AlphaMaskScale") || HitIgnore("_AlphaMaskValue");
                 if (showAdvanced)
                     m_AlphaMaskAdvanced = EditorGUILayout.Toggle(advancedLabel, m_AlphaMaskAdvanced);
                 if (showAdvanced && (m_AlphaMaskAdvanced || namedScale || namedOffset))
@@ -1633,7 +1631,7 @@ namespace NW.FairyToon.Editor
             bool uvOpen = EditorPrefs.GetBool(uvKey, false);
             if (drewMatCap)
             {
-            Rect texRow = GUILayoutUtility.GetLastRect();
+            Rect texRow = m_TextureRow;
             bool nextUv = EditorGUI.Foldout(new Rect(texRow.x + 1f, texRow.y, 14f, texRow.height), uvOpen, GUIContent.none, true);
             if (nextUv != uvOpen) EditorPrefs.SetBool(uvKey, nextUv);
             uvOpen = nextUv;
@@ -1653,7 +1651,7 @@ namespace NW.FairyToon.Editor
             bool maskOpen = EditorPrefs.GetBool(maskKey, false);
             if (drewMask)
             {
-            Rect maskRow = GUILayoutUtility.GetLastRect();
+            Rect maskRow = m_TextureRow;
             bool nextMask = EditorGUI.Foldout(new Rect(maskRow.x + 1f, maskRow.y, 14f, maskRow.height), maskOpen, GUIContent.none, true);
             if (nextMask != maskOpen) EditorPrefs.SetBool(maskKey, nextMask);
             maskOpen = nextMask;
@@ -1787,7 +1785,7 @@ namespace NW.FairyToon.Editor
                 bool outlineOpen = EditorPrefs.GetBool(outlineUv, false);
                 if (drewOutline)
                 {
-                    Rect outlineRow = GUILayoutUtility.GetLastRect();
+                    Rect outlineRow = m_TextureRow;
                     bool nextOutline = EditorGUI.Foldout(new Rect(outlineRow.x + 1f, outlineRow.y, 14f, outlineRow.height), outlineOpen, GUIContent.none, true);
                     if (nextOutline != outlineOpen) EditorPrefs.SetBool(outlineUv, nextOutline);
                     outlineOpen = nextOutline;
@@ -3075,17 +3073,15 @@ namespace NW.FairyToon.Editor
             {
                 if (IsGammaHdr(name) || IsBuiltinHdr(name))
                 {
+                    bool wrapped = NarrowHdrRow();
                     Rect row = EditorGUILayout.GetControlRect();
-                    // A control rect is a 1px placeholder during Layout, so its width must not decide
-                    // whether another row is reserved. currentViewWidth is the same on both passes.
-                    Rect hexLine = default;
-                    if (NarrowHdrRow()) hexLine = EditorGUILayout.GetControlRect();
+                    Rect hexLine = wrapped ? EditorGUILayout.GetControlRect() : default;
                     BeginScope(row, prop);
                     try
                     {
                         EditorGUI.showMixedValue = prop.hasMixedValue;
                         Color color = prop.colorValue;
-                        if (FairyToonHDRDrawer.Draw(row, shown, ref color, hexLine)) prop.colorValue = color;
+                        if (FairyToonHDRDrawer.Draw(row, shown, ref color, hexLine, wrapped)) prop.colorValue = color;
                     }
                     finally
                     {
@@ -3239,31 +3235,21 @@ namespace NW.FairyToon.Editor
             bool colorExtra = other != null && other.propertyType == ShaderPropertyType.Color;
             bool hdr = colorExtra && (IsGammaHdr(extra) || IsBuiltinHdr(extra));
             bool wrap = hdr && NarrowHdrRow();
-            // A range or float rides in the texture row. Colours are drawn afterwards so HDR can wrap.
-            Rect row = m_Editor.TexturePropertySingleLine(content, tex, colorExtra ? null : other);
-            if (!colorExtra) return true;
+            // Scalars and ordinary colours are drawn once, by the native row. Only HDR takes a custom rect.
+            Rect row = m_Editor.TexturePropertySingleLine(content, tex, hdr ? null : other);
+            m_TextureRow = row;
+            if (!hdr) return true;
             Rect slot = wrap ? EditorGUILayout.GetControlRect() : row;
             if (!wrap)
             {
-                slot.xMin = row.xMax - (hdr ? 50f + 4f + 72f : 54f);
-                if (slot.xMin < row.x) slot.xMin = row.x;
+                slot.xMin = Mathf.Max(row.x, row.xMax - (50f + 4f + 72f));
             }
             BeginScope(slot, other);
             try
             {
                 EditorGUI.showMixedValue = other.hasMixedValue;
-                if (hdr)
-                {
-                    Color color = other.colorValue;
-                    if (FairyToonHDRDrawer.Draw(wrap ? row : slot, null, ref color, wrap ? slot : default)) other.colorValue = color;
-                }
-                else
-                {
-                    var swatch = new Rect(slot.xMax - 50f, slot.y, 50f, slot.height);
-                    EditorGUI.BeginChangeCheck();
-                    Color color = EditorGUI.ColorField(swatch, GUIContent.none, other.colorValue, true, true, false);
-                    if (EditorGUI.EndChangeCheck()) other.colorValue = color;
-                }
+                Color color = other.colorValue;
+                if (FairyToonHDRDrawer.Draw(wrap ? row : slot, null, ref color, wrap ? slot : default, wrap)) other.colorValue = color;
             }
             finally
             {

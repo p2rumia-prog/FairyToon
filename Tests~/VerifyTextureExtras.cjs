@@ -27,10 +27,10 @@ if (!tex) errors.push('Tex() was not found');
 else {
   const call = tex.match(/TexturePropertySingleLine\s*\(([^;]*)\)/);
   if (!call) errors.push('Tex() does not call TexturePropertySingleLine');
-  else if (!/colorExtra\s*\?\s*null\s*:\s*other/.test(call[1]))
-    errors.push('Tex() drops a non-colour extra instead of passing it as TexturePropertySingleLine\'s third argument');
+  else if (!/hdr\s*\?\s*null\s*:\s*other/.test(call[1]))
+    errors.push('Tex() must pass scalars and ordinary colours to TexturePropertySingleLine, and keep HDR for the custom swatch');
   const callAt = tex.indexOf('TexturePropertySingleLine');
-  const early = tex.indexOf('if (!colorExtra) return');
+  const early = tex.indexOf('if (!hdr) return');
   if (early >= 0 && early < callAt)
     errors.push('Tex() returns before the texture row can draw its extra property');
 }
