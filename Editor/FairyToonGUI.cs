@@ -2061,12 +2061,13 @@ namespace NW.FairyToon.Editor
             if (fur)
             {
                 EditorGUILayout.BeginVertical(s_Outer);
-                EditorGUILayout.LabelField("Fur Rendering");
+                EditorGUILayout.LabelField(FairyToonL10n.Text("sFur"));
                 EditorGUILayout.BeginVertical(s_InnerFull);
-                P("_FurCull");
+                IntPopup("_FurCull", "sCullMode", "sCullModeOff", "sCullModeFront", "sCullModeBack");
                 P("_FurZClip");
                 P("_FurZTest");
-                P("_FurColorMask");
+                IntPopup("_FurColorMask", "sColorMask",
+                    "None", "A", "B", "BA", "G", "GA", "GB", "GBA", "R", "RA", "RB", "RBA", "RG", "RGA", "RGB", "RGBA");
                 P("_FurOffsetFactor");
                 P("_FurOffsetUnits");
                 P("_FurBlendOp");
@@ -2979,6 +2980,29 @@ namespace NW.FairyToon.Editor
                 EndSection();
             }
             EditorGUI.indentLevel--;
+        }
+
+        private void IntPopup(string name, string label, params string[] options)
+        {
+            var prop = Prop(name);
+            if (prop == null || !RowVisible(name, label)) return;
+            var labels = new string[options.Length];
+            for (int i = 0; i < options.Length; i++)
+                labels[i] = options[i].StartsWith("s", StringComparison.Ordinal) ? FairyToonL10n.Text(options[i]) : options[i];
+            Rect row = EditorGUILayout.GetControlRect();
+            BeginScope(row, prop);
+            try
+            {
+                EditorGUI.showMixedValue = prop.hasMixedValue;
+                EditorGUI.BeginChangeCheck();
+                int next = EditorGUI.Popup(row, FairyToonL10n.Text(label), Mathf.RoundToInt(Number(prop)), labels);
+                if (EditorGUI.EndChangeCheck()) SetNumber(prop, next);
+            }
+            finally
+            {
+                EditorGUI.showMixedValue = false;
+                EndScope();
+            }
         }
 
         private static bool NarrowHdrRow()

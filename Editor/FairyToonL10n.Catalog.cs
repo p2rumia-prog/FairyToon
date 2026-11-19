@@ -28,6 +28,11 @@ namespace NW.FairyToon.Editor
             Add("sHelp", "Help", "ヘルプ", "帮助");
             Add("sAlpha", "Alpha", "不透明度", "透明度");
             Add("sCullMode", "Cull Mode", "Cull Mode (描画面)", "Cull Mode (剔除模式)");
+            Add("sCullModeOff", "Off", "Off", "Off");
+            Add("sCullModeFront", "Front", "Front", "Front");
+            Add("sCullModeBack", "Back", "Back", "Back");
+            Add("sColorMask", "Color Mask", "Color Mask", "Color Mask");
+            Add("sFur", "Fur", "Fur", "Fur");
             Add("sAlphaMode", "Alpha Mode", "アルファモード", "Alpha 模式");
             Add("sFresnelPower", "Fresnel Power", "フレネル強度", "菲涅尔");
             Add("sChromaticAberration", "Chromatic Aberration", "色収差", "色差");
