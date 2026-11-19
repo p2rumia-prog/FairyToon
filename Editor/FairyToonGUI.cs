@@ -2708,14 +2708,6 @@ namespace NW.FairyToon.Editor
             bool wantScale = invertChanged;
             bool wantOffset = invertChanged || transparencyChanged;
             if (scale.targets == null) return;
-            bool pairLocked = false;
-            foreach (Object target in scale.targets)
-            {
-                var material = target as Material;
-                if (material == null) continue;
-                if ((wantScale && Locked(material, scale.name)) || (wantOffset && Locked(material, offset.name)))
-                    pairLocked = true;
-            }
             float previousScale = Number(scale);
             float previousOffset = Number(offset);
             Undo.IncrementCurrentGroup();
@@ -2727,23 +2719,30 @@ namespace NW.FairyToon.Editor
                 bool offsetHandled = false;
                 try
                 {
-                    if (!pairLocked)
-                    {
-                        if (wantScale) scaleHandled = OfferFloat(scale, callbackScale);
-                        if (wantOffset) offsetHandled = OfferFloat(offset, callbackOffset);
-                    }
+                    if (wantScale) scaleHandled = OfferFloat(scale, callbackScale);
+                    if (wantOffset) offsetHandled = OfferFloat(offset, callbackOffset);
                 }
                 catch (Exception ex)
                 {
                     failure = ex;
                 }
-                bool paired = failure == null && !pairLocked && (!wantScale || scaleHandled) && (!wantOffset || offsetHandled);
+                bool paired = failure == null && (!wantScale || scaleHandled) && (!wantOffset || offsetHandled);
+                bool restored = true;
                 if (!paired)
                 {
-                    if (scaleHandled) OfferFloat(scale, previousScale);
-                    if (offsetHandled) OfferFloat(offset, previousOffset);
+                    try
+                    {
+                        if (scaleHandled && !OfferFloat(scale, previousScale)) restored = false;
+                        if (offsetHandled && !OfferFloat(offset, previousOffset)) restored = false;
+                    }
+                    catch (Exception ex)
+                    {
+                        restored = false;
+                        if (failure == null) failure = ex;
+                    }
                 }
-                if (paired) return;
+                if (failure != null) throw failure;
+                if (paired || !restored) return;
                 foreach (Object target in scale.targets)
                 {
                     var material = target as Material;
