@@ -2269,9 +2269,8 @@ namespace NW.FairyToon.Editor
 
         private void OpenContentBox()
         {
-            EditorGUILayout.BeginVertical(s_Outer);
+            // lilToon's untitled Base box is only customBox: a 1px edge, not the solid outer frame around it.
             EditorGUILayout.BeginVertical(s_Custom);
-            m_InnerDepth++;
         }
 
         private void CloseBox()
@@ -3291,6 +3290,7 @@ namespace NW.FairyToon.Editor
             s_InnerFull = BoxStyle(4, 2, 2, GuiBox("gui_box_inner_" + skin));
             s_InnerFull.margin = new RectOffset(2, 2, 0, 2);
             s_Custom = BoxStyle(6, 4, 4, GuiBox("gui_custom_box_" + skin));
+            s_Custom.margin = new RectOffset(4, 4, 2, 4);
             s_Inner = s_InnerHalf;
             s_Box = s_Outer;
             s_Gear = new GUIStyle(GUIStyle.none) { alignment = TextAnchor.MiddleCenter };
