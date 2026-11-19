@@ -102,6 +102,7 @@ namespace NW.FairyToon.Editor
         private bool m_AlphaMaskAdvanced;
         private int m_InnerDepth;
         private int m_Verticals;
+        private bool m_HeaderGapPending;
         private readonly List<bool> m_Frames = new List<bool>();
         private static bool s_ProSkin;
         private static string s_Search = "";
@@ -284,6 +285,7 @@ namespace NW.FairyToon.Editor
                 s_InspectorPass = false;
                 while (m_Verticals > 0) PopVertical();
                 m_InnerDepth = 0;
+                m_HeaderGapPending = false;
                 m_Frames.Clear();
                 if (exitGui)
                 {
@@ -742,7 +744,7 @@ namespace NW.FairyToon.Editor
                     EditorGUILayout.LabelField(warning, EditorStyles.wordWrappedLabel);
                 return;
             }
-            HeaderGap();
+            ConsumeHeaderGap();
             PushVertical(s_Outer);
             PropertyGearRow("_AlphaMaskMode", "Mode", PropertyBlock.AlphaMask);
             var mode = Prop("_AlphaMaskMode");
@@ -1684,9 +1686,24 @@ namespace NW.FairyToon.Editor
         private void RimLight()
         {
 
-            if (!SearchAllows("_UseRim", "_RimColorTex", "_RimColor", "_RimBorder", "_RimBlur", "_RimFresnelPower", "_RimShadowMask", "_RimMainStrength", "_RimNormalStrength", "_RimEnableLighting", "_RimBackfaceMask", "_RimApplyTransparency", "_RimBlendMode", "_RimDirStrength", "_RimDirRange", "_RimIndirRange", "_RimIndirColor", "_RimIndirBorder", "_RimIndirBlur", "_RimColorTex|Color / Mask")) return;
+            if (!SearchAllows("_UseRim", "_RimColorTex", "_RimColor", "_RimBorder", "_RimBlur", "_RimFresnelPower", "_RimShadowMask", "_RimMainStrength", "_RimNormalStrength", "_RimEnableLighting", "_RimBackfaceMask", "_RimApplyTransparency", "_RimBlendMode", "_RimDirStrength", "_RimDirRange", "_RimIndirRange", "_RimIndirColor", "_RimIndirBorder", "_RimIndirBlur", "_RimColorTex|Color / Mask", "|ft.Tiling", "|ft.Offset")) return;
             if (!BeginSection("Rim", "sRimLightSetting", Prop("_UseRim"), false, PropertyBlock.RimLight)) return;
-            Tex("_RimColorTex", "_RimColor", "Color / Mask");
+            bool drewRim = Tex("_RimColorTex", "_RimColor", "Color / Mask");
+            string rimUv = PrefsPrefix + "Foldout.RimUV";
+            bool rimOpen = EditorPrefs.GetBool(rimUv, false);
+            if (drewRim)
+            {
+                Rect rimRow = m_TextureRow;
+                bool nextRim = EditorGUI.Foldout(new Rect(rimRow.x + 1f, rimRow.y, 14f, rimRow.height), rimOpen, GUIContent.none, true);
+                if (nextRim != rimOpen) EditorPrefs.SetBool(rimUv, nextRim);
+                rimOpen = nextRim;
+            }
+            if (rimOpen || (Searching && (LabelOnly("ft.Tiling") || LabelOnly("ft.Offset"))))
+            {
+                EditorGUI.indentLevel++;
+                ScaleOffset("_RimColorTex");
+                EditorGUI.indentLevel--;
+            }
             ColorAlpha("_RimColor");
             P("_RimMainStrength", "sStrengthFromMain");
             P("_RimEnableLighting", "sEnableLighting");
@@ -1870,14 +1887,17 @@ namespace NW.FairyToon.Editor
             P("_VertexColor2FurVector", "sVertexColor2Vector");
             P("_FurGravity", "sGravity");
             P("_FurRandomize", "sRandomize");
+            // lilToon draws these lines even while search hides the rows between them, so a Vector
+            // query stacks the layer line and the Rim Light line directly above the Rim Light label.
+            Separator();
             Tex("_FurNoiseMask", null, "sNoise");
             ScaleOffset("_FurNoiseMask");
             Tex("_FurMask", null, "sAlphaMask");
             P("_FurAO", "sAmbientOcclusion");
+            Separator();
             P("_FurLayerNum", "sLayerNum");
             MinusRange("_FurRootOffset", "sRootWidth");
-            bool furRim = !Searching || RowVisible("_FurRimColor", "Color") || RowVisible("_FurRimFresnelPower", "Fresnel Power") || RowVisible("_FurRimAntiLight", "Anti Light") || HitIgnore(FairyToonL10n.Text("sRimLight"));
-            if (!furRim) { EndSection(); return; }
+            Separator();
             EditorGUILayout.LabelField(FairyToonL10n.Text("sRimLight"), EditorStyles.boldLabel);
             EditorGUI.indentLevel++;
             P("_FurRimColor", "Color");
@@ -2080,7 +2100,7 @@ namespace NW.FairyToon.Editor
                 P("_DstBlendAlpha");
             }
             if (UnityRowVisible("Enable GPU Instancing")) m_Editor.EnableInstancingField();
-            if (UnityRowVisible("Render Queue")) m_Editor.RenderQueueField();
+            if (UnityRowVisible("Render Queue")) DrawRenderQueue();
             if (UnityRowVisible("Double Sided Global Illumination")) m_Editor.DoubleSidedGIField();
 
             EndSection();
@@ -2119,6 +2139,53 @@ namespace NW.FairyToon.Editor
         }
 
         // ---- Layout helpers ----
+
+        // A queue equal to this shader's Queue tag is lilToon's From Shader, including an explicit copy of that number.
+        private void DrawRenderQueue()
+        {
+            var materials = new List<Material>();
+            foreach (Object target in m_Editor.targets)
+                if (target is Material material && material.shader != null) materials.Add(material);
+            if (materials.Count == 0) return;
+            int Shown(Material material)
+            {
+                int raw = material.rawRenderQueue;
+                return raw < 0 || raw == material.shader.renderQueue ? -1 : raw;
+            }
+            int first = Shown(materials[0]);
+            bool mixedPopup = false;
+            bool mixedNumber = false;
+            int effective = materials[0].renderQueue;
+            for (int i = 1; i < materials.Count; i++)
+            {
+                if (Shown(materials[i]) != first) mixedPopup = true;
+                if (materials[i].renderQueue != effective) mixedNumber = true;
+            }
+            Rect row = EditorGUILayout.GetControlRect();
+            Rect popup = row;
+            popup.width = Mathf.Max(0f, popup.width - EditorGUIUtility.fieldWidth - 2f);
+            Rect number = row;
+            number.xMin = number.xMax - EditorGUIUtility.fieldWidth;
+            EditorGUI.showMixedValue = mixedPopup;
+            EditorGUI.BeginChangeCheck();
+            int picked = EditorGUI.IntPopup(popup, FairyToonL10n.Text("Render Queue"), mixedPopup ? -1 : first, new[]
+            {
+                L10n.Tr("From Shader"), L10n.Tr("Geometry"), L10n.Tr("AlphaTest"), L10n.Tr("Transparent")
+            }, new[] { -1, (int)RenderQueue.Geometry, (int)RenderQueue.AlphaTest, (int)RenderQueue.Transparent });
+            bool popupChanged = EditorGUI.EndChangeCheck();
+            EditorGUI.showMixedValue = mixedNumber;
+            EditorGUI.BeginChangeCheck();
+            int edited = EditorGUI.IntField(number, effective);
+            bool numberChanged = EditorGUI.EndChangeCheck();
+            EditorGUI.showMixedValue = false;
+            if (!popupChanged && !numberChanged) return;
+            Undo.RecordObjects(m_Editor.targets, "Render Queue");
+            foreach (Material material in materials)
+            {
+                int value = numberChanged ? edited : picked;
+                material.renderQueue = value < 0 || value == material.shader.renderQueue ? -1 : value;
+            }
+        }
 
         private void RenderingMode()
         {
@@ -2248,8 +2315,11 @@ namespace NW.FairyToon.Editor
             string shown = FairyToonL10n.Text(title);
             if (foldout)
             {
-                // 20 points is 30 px at 150%, the pitch of a collapsed lilToon header.
-                Rect rect = GUILayoutUtility.GetRect(16f, 20f, GUILayout.ExpandWidth(true));
+                // lilToon reserves GetRect(16, 20, Shuriken style). That style's fixedHeight is 22,
+                // so the slot is 22 pt: the 28 px bar plus the 5 px shadow at 150%. A 20 pt slot
+                // lets the extra 2 pt paint over the 3 px header gap.
+                float header = s_Foldout != null && s_Foldout.fixedHeight > 0f ? s_Foldout.fixedHeight : 22f;
+                Rect rect = GUILayoutUtility.GetRect(16f, header, GUILayout.ExpandWidth(true));
                 if (s_Foldout != null) GUI.Box(rect, GUIContent.none, s_Foldout);
                 float x = rect.x + 4f;
                 Rect arrow = new Rect(x, rect.y + 3f, 14f, 16f);
@@ -2269,6 +2339,7 @@ namespace NW.FairyToon.Editor
                 if (e.type == EventType.Repaint) EditorStyles.foldout.Draw(arrow, false, false, open, false);
             }
             if (!open) return false;
+            if (foldout) m_HeaderGapPending = true;
             if (!frame)
             {
                 m_Frames.Add(false);
@@ -2288,7 +2359,7 @@ namespace NW.FairyToon.Editor
         // Outer fill is the measured title-bar colour. The inner fill is the darker content, inset so the outer colour reads as a 2px outline.
         private bool OpenBox(string shown, MaterialProperty toggle, PropertyBlock? block, bool full = false)
         {
-            HeaderGap();
+            ConsumeHeaderGap();
             PushVertical(s_Outer);
             Rect row = GUILayoutUtility.GetRect(16f, 22f, GUILayout.ExpandWidth(true));
             float x = row.x + 1f;
@@ -2329,13 +2400,15 @@ namespace NW.FairyToon.Editor
         private void OpenContentBox()
         {
             // lilToon's untitled Base box is only customBox: a 1px edge, not the solid outer frame around it.
-            HeaderGap();
+            ConsumeHeaderGap();
             PushVertical(s_Custom);
         }
 
-        // 2 points is 3 px at 150%. A box margin is collapsed or covered by the header shadow, so this is an empty row.
-        private static void HeaderGap()
+        // 2 points is 3 px at 150%. Only the first box after a section header consumes it, so sibling boxes keep their own margin.
+        private void ConsumeHeaderGap()
         {
+            if (!m_HeaderGapPending) return;
+            m_HeaderGapPending = false;
             GUILayoutUtility.GetRect(0f, 2f, GUILayout.ExpandWidth(true));
         }
 
@@ -3482,7 +3555,7 @@ namespace NW.FairyToon.Editor
             s_Line = s_ProSkin ? new Color(0.35f, 0.35f, 0.35f, 1f) : new Color(0.4f, 0.4f, 0.4f, 1f);
             string skin = s_ProSkin ? "dark" : "light";
             s_Outer = BoxStyle(4, 4, 2, GuiBox("gui_box_outer_" + skin));
-            // The header gap is HeaderGap(), not this margin. A top margin was covered by the header shadow.
+            // The header gap is ConsumeHeaderGap(), not this margin. A top margin was covered by the header shadow.
             s_Outer.margin = new RectOffset(4, 4, 0, 4);
             // Vertical padding and the inner top margin are the same colour as the title, so they
             // made the bar 39 px. The 22-point title row is the whole bar, 33 px at 150%.
