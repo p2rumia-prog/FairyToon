@@ -81,7 +81,8 @@ namespace NW.FairyToon.Editor
             // Gem's shader and lilToon both default ZWrite to 0. Every other mode starts at 1.
             material.SetFloat("_ZWrite", mode == Gem ? 0f : 1f);
             if (mode == Gem && material.HasProperty("_Cull")) material.SetFloat("_Cull", 0f);
-            if (material.HasProperty("_OutlineCull")) material.SetFloat("_OutlineCull", 1f);
+            // Fur and Gem hide the Outline section but keep its saved values. Reset must not change them.
+            if (mode != Fur && mode != Gem && material.HasProperty("_OutlineCull")) material.SetFloat("_OutlineCull", 1f);
             if (mode == Fur)
             {
                 material.SetFloat("_FurZTest", (int)CompareFunction.LessEqual);
