@@ -2269,6 +2269,7 @@ namespace NW.FairyToon.Editor
         // Outer fill is the measured title-bar colour. The inner fill is the darker content, inset so the outer colour reads as a 2px outline.
         private bool OpenBox(string shown, MaterialProperty toggle, PropertyBlock? block, bool full = false)
         {
+            HeaderGap();
             EditorGUILayout.BeginVertical(s_Outer);
             Rect row = GUILayoutUtility.GetRect(16f, 22f, GUILayout.ExpandWidth(true));
             float x = row.x + 1f;
@@ -2303,7 +2304,14 @@ namespace NW.FairyToon.Editor
         private void OpenContentBox()
         {
             // lilToon's untitled Base box is only customBox: a 1px edge, not the solid outer frame around it.
+            HeaderGap();
             EditorGUILayout.BeginVertical(s_Custom);
+        }
+
+        // 2 points is 3 px at 150%. A box margin is collapsed or covered by the header shadow, so this is an empty row.
+        private static void HeaderGap()
+        {
+            GUILayoutUtility.GetRect(0f, 2f, GUILayout.ExpandWidth(true));
         }
 
         private void CloseBox()
@@ -3337,7 +3345,8 @@ namespace NW.FairyToon.Editor
                 fontSize = EditorStyles.label.fontSize,
                 border = new RectOffset(15, 7, 4, 4),
                 contentOffset = new Vector2(20f, -2f),
-                fixedHeight = 22
+                fixedHeight = 22,
+                overflow = new RectOffset(0, 0, 0, 0)
             };
             if (s_Foldout.normal.background == null)
             {
@@ -3355,8 +3364,8 @@ namespace NW.FairyToon.Editor
             s_Line = s_ProSkin ? new Color(0.35f, 0.35f, 0.35f, 1f) : new Color(0.4f, 0.4f, 0.4f, 1f);
             string skin = s_ProSkin ? "dark" : "light";
             s_Outer = BoxStyle(4, 4, 2, GuiBox("gui_box_outer_" + skin));
-            // 2 points is 3 px at 150%, the measured gap from the section header to the box.
-            s_Outer.margin = new RectOffset(4, 4, 2, 4);
+            // The header gap is HeaderGap(), not this margin. A top margin was covered by the header shadow.
+            s_Outer.margin = new RectOffset(4, 4, 0, 4);
             // Vertical padding and the inner top margin are the same colour as the title, so they
             // made the bar 39 px. The 22-point title row is the whole bar, 33 px at 150%.
             s_Outer.padding = new RectOffset(2, 2, 0, 0);
@@ -3365,7 +3374,7 @@ namespace NW.FairyToon.Editor
             s_InnerFull = BoxStyle(4, 2, 2, GuiBox("gui_box_inner_" + skin));
             s_InnerFull.margin = new RectOffset(2, 2, 0, 2);
             s_Custom = BoxStyle(6, 4, 4, GuiBox("gui_custom_box_" + skin));
-            s_Custom.margin = new RectOffset(4, 4, 2, 4);
+            s_Custom.margin = new RectOffset(4, 4, 0, 4);
             s_Inner = s_InnerHalf;
             s_Box = s_Outer;
             s_Gear = new GUIStyle(GUIStyle.none) { alignment = TextAnchor.MiddleCenter };
