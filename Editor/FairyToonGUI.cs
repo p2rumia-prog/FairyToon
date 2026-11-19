@@ -173,10 +173,12 @@ namespace NW.FairyToon.Editor
         public override void ValidateMaterial(Material material)
         {
             if (material == null) return;
-            // This setter's callback kept the write. Do not Apply just because an earlier write was direct.
-            if (s_PendingSkip.Remove(material)) return;
+            // A kept callback skips Apply, but the inspector's follow-up pass still has to count this material
+            // exactly once. Returning before the count left the skip for a later, unrelated validation.
+            bool pending = s_PendingSkip.Remove(material);
             if (s_InspectorPass || s_MenuOperation)
             {
+                if (pending) return;
                 s_DirectTargets.Add(material);
                 FairyToonMaterialSetup.Apply(material);
                 return;
@@ -184,11 +186,11 @@ namespace NW.FairyToon.Editor
             if (s_PostPassesLeft > 0 && s_InspectorTargets.Contains(material))
             {
                 s_PostPassesLeft--;
-                // Direct writes already ran Apply in their own setter validation.
-                if (s_NativeChanged.Contains(material)) FairyToonMaterialSetup.Apply(material);
+                if (!pending && s_NativeChanged.Contains(material)) FairyToonMaterialSetup.Apply(material);
                 if (s_PostPassesLeft == 0) ClearValidationScope();
                 return;
             }
+            if (pending) return;
             FairyToonMaterialSetup.Apply(material);
         }
 
@@ -291,8 +293,8 @@ namespace NW.FairyToon.Editor
         // so its setter validation uses the same per-material result as a field edit.
         internal static void BeginMenuOperation(MaterialProperty[] props, List<SavedCallback> wrapped)
         {
-            s_ConsumedTargets.Clear();
-            s_DirectTargets.Clear();
+            s_MenuSaved = TakeValidationSnapshot();
+            ClearValidationScope();
             s_MenuOperation = true;
             if (props == null) return;
             for (int i = 0; i < props.Length; i++) WrapCallback(props[i], wrapped);
@@ -301,9 +303,60 @@ namespace NW.FairyToon.Editor
         internal static void EndMenuOperation(List<SavedCallback> wrapped)
         {
             if (wrapped != null) RestoreCallbacks(wrapped);
-            s_MenuOperation = false;
-            s_ConsumedTargets.Clear();
-            s_DirectTargets.Clear();
+            RestoreValidationSnapshot(s_MenuSaved);
+        }
+
+        private struct ValidationSnapshot
+        {
+            public HashSet<Object> Consumed;
+            public HashSet<Object> Direct;
+            public HashSet<Object> NativeChanged;
+            public HashSet<Object> Pending;
+            public HashSet<Object> Inspector;
+            public Dictionary<Object, NativeState> NativeBefore;
+            public bool InspectorPass;
+            public bool Menu;
+            public int PostPasses;
+        }
+
+        private static ValidationSnapshot s_MenuSaved;
+
+        private static ValidationSnapshot TakeValidationSnapshot()
+        {
+            return new ValidationSnapshot
+            {
+                Consumed = new HashSet<Object>(s_ConsumedTargets),
+                Direct = new HashSet<Object>(s_DirectTargets),
+                NativeChanged = new HashSet<Object>(s_NativeChanged),
+                Pending = new HashSet<Object>(s_PendingSkip),
+                Inspector = new HashSet<Object>(s_InspectorTargets),
+                NativeBefore = new Dictionary<Object, NativeState>(s_NativeBefore),
+                InspectorPass = s_InspectorPass,
+                Menu = s_MenuOperation,
+                PostPasses = s_PostPassesLeft
+            };
+        }
+
+        private static void RestoreValidationSnapshot(ValidationSnapshot snapshot)
+        {
+            CopySet(s_ConsumedTargets, snapshot.Consumed);
+            CopySet(s_DirectTargets, snapshot.Direct);
+            CopySet(s_NativeChanged, snapshot.NativeChanged);
+            CopySet(s_PendingSkip, snapshot.Pending);
+            CopySet(s_InspectorTargets, snapshot.Inspector);
+            s_NativeBefore.Clear();
+            if (snapshot.NativeBefore != null)
+                foreach (var pair in snapshot.NativeBefore) s_NativeBefore[pair.Key] = pair.Value;
+            s_InspectorPass = snapshot.InspectorPass;
+            s_MenuOperation = snapshot.Menu;
+            s_PostPassesLeft = snapshot.PostPasses;
+        }
+
+        private static void CopySet(HashSet<Object> destination, HashSet<Object> source)
+        {
+            destination.Clear();
+            if (source == null) return;
+            foreach (Object item in source) destination.Add(item);
         }
 
         internal static void NoteDirectWrite(Object target)
@@ -2402,16 +2455,19 @@ namespace NW.FairyToon.Editor
             if (prop.targets == null) return;
             Undo.IncrementCurrentGroup();
             int group = Undo.GetCurrentGroup();
-            Undo.RecordObjects(prop.targets, "Modify Alpha");
-            foreach (Object target in prop.targets)
+            try
             {
-                var material = target as Material;
-                if (material == null || !material.HasProperty(prop.name)) continue;
-                Color color = material.GetColor(prop.name);
-                color.a = alpha;
-                material.SetColor(prop.name, color);
+                Undo.RecordObjects(prop.targets, "Modify Alpha");
+                foreach (Object target in prop.targets)
+                {
+                    var material = target as Material;
+                    if (material == null || !material.HasProperty(prop.name)) continue;
+                    Color color = material.GetColor(prop.name);
+                    color.a = alpha;
+                    material.SetColor(prop.name, color);
+                }
             }
-            Undo.CollapseUndoOperations(group);
+            finally { Undo.CollapseUndoOperations(group); }
         }
 
         private static void WriteAlphaMask(MaterialProperty scale, MaterialProperty offset, bool invertChanged, bool transparencyChanged, bool invert, float transparency)
@@ -2476,12 +2532,18 @@ namespace NW.FairyToon.Editor
             if (!RowVisible(name, "sAlpha")) return;
             Rect row = EditorGUILayout.GetControlRect();
             BeginScope(row, prop);
-            EditorGUI.showMixedValue = prop.hasMixedValue;
-            EditorGUI.BeginChangeCheck();
-            float alpha = EditorGUI.Slider(row, FairyToonL10n.Text("sAlpha"), prop.colorValue.a, 0f, 1f);
-            if (EditorGUI.EndChangeCheck()) WriteAlpha(prop, alpha);
-            EditorGUI.showMixedValue = false;
-            EndScope();
+            try
+            {
+                EditorGUI.showMixedValue = prop.hasMixedValue;
+                EditorGUI.BeginChangeCheck();
+                float alpha = EditorGUI.Slider(row, FairyToonL10n.Text("sAlpha"), prop.colorValue.a, 0f, 1f);
+                if (EditorGUI.EndChangeCheck()) WriteAlpha(prop, alpha);
+            }
+            finally
+            {
+                EditorGUI.showMixedValue = false;
+                EndScope();
+            }
         }
 
         private void SubHeader(string title)
