@@ -15,7 +15,9 @@ Adapted in this package:
 - `Editor/FairyToonL10n.cs` and `Editor/FairyToonL10n.Catalog.cs` (editor-mode names, section titles, and other strings taken from the `.po` files)
 - `Editor/FairyToonPropertyBlocks.cs` (property names, texture flags, and property-block membership from `lilMaterialProperties.cs`)
 - `Editor/FairyToonClipboard.cs` (accumulating `CopiedProperties` / `CopiedVectorProperties`, Copy, Paste, Paste with texture, Reset)
-- `Editor/FairyToonGUI.cs` (Advanced / Preset / Shader Setting toolbar, row search, Shuriken foldout header, parent and child gears, localized enum options, section order)
+- `Editor/FairyToonGUI.cs` (Advanced / Preset / Shader Setting toolbar, row search, Shuriken foldout header, parent and child gears, localized enum options, section order, and the outer/inner box layout from `lilEditorGUI.InitializeBox` and `InitializeGUIStyles`)
+
+The box fills are generated in the inspector. They are not copies of lilToon's GUI textures. The dark-skin colours match a measured lilToon 2.4.1 inspector: title bar (90, 89, 90), content (57, 56, 57), and a 2px outline in the title colour.
 
 The license text below is the `LICENSE` file at that commit.
 

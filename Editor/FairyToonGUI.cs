@@ -74,10 +74,16 @@ namespace NW.FairyToon.Editor
 
         private static GUIStyle s_HeaderLabel;
         private static GUIStyle s_Box;
+        private static GUIStyle s_Outer;
+        private static GUIStyle s_Inner;
         private static GUIStyle s_Foldout;
         private static GUIStyle s_Gear;
+        private static Texture2D s_OuterTex;
+        private static Texture2D s_InnerTex;
+        private static Color s_Line;
         private bool m_AlphaMaskAdvanced;
         private int m_InnerDepth;
+        private readonly List<bool> m_Frames = new List<bool>();
         private static bool s_ProSkin;
         private static string s_Search = "";
 
@@ -251,6 +257,7 @@ namespace NW.FairyToon.Editor
                 RestoreCallbacks(wrapped);
                 s_InspectorPass = false;
                 m_InnerDepth = 0;
+                m_Frames.Clear();
                 if (exitGui)
                 {
                     ClearValidationScope();
@@ -644,7 +651,7 @@ namespace NW.FairyToon.Editor
             bool second = PrefixMatches("_Main2nd") || PrefixMatches("_FT_Main2nd") || SearchAllows("_Color2nd", "_UseMain2ndTex", "|UV Line Angle (radians)", "|Position / Direction (XY UV, XYZ Object, W UV Angle)", "|ft.Tiling", "|ft.Offset", "|Decal", "|sMirrorMode", "|sCopyMode", "|sPositionX", "|sPositionY", "|sScaleX", "|sScaleY", "|sScroll", "|sRotate");
             bool third = PrefixMatches("_Main3rd") || PrefixMatches("_FT_Main3rd") || SearchAllows("_Color3rd", "_UseMain3rdTex", "|UV Line Angle (radians)", "|Position / Direction (XY UV, XYZ Object, W UV Angle)", "|ft.Tiling", "|ft.Offset", "|Decal", "|sMirrorMode", "|sCopyMode", "|sPositionX", "|sPositionY", "|sScaleX", "|sScaleY", "|sScroll", "|sRotate");
             if (Searching && !first && !alpha && !second && !third) return;
-            if (!BeginSection("Main", "sMainColorSetting", null, true, PropertyBlock.MainColor)) return;
+            if (!BeginSection("Main", "sMainColorSetting", null, true, PropertyBlock.MainColor, true, false)) return;
             if (first) MainColorFirst();
             if (second) MainColorLayer("2nd");
             if (third) MainColorLayer("3rd");
@@ -691,8 +698,7 @@ namespace NW.FairyToon.Editor
                 Help("sAlphaMaskWarnOpaque", MessageType.Info);
                 return;
             }
-            EditorGUILayout.BeginVertical(s_Box);
-            EditorGUILayout.LabelField(FairyToonL10n.Text("sAlphaMask"));
+            if (!OpenBox(FairyToonL10n.Text("sAlphaMask"), null, PropertyBlock.AlphaMask)) return;
             PropertyGearRow("_AlphaMaskMode", "Mode", PropertyBlock.AlphaMask);
             var mode = Prop("_AlphaMaskMode");
             if (mode != null && (mode.hasMixedValue || Number(mode) != 0f))
@@ -764,7 +770,7 @@ namespace NW.FairyToon.Editor
                     EditorGUI.indentLevel--;
                 }
             }
-            EditorGUILayout.EndVertical();
+            CloseBox();
         }
 
         private void MainColorLayer(string layer)
@@ -1109,7 +1115,7 @@ namespace NW.FairyToon.Editor
                 Tex("_ShadowRampTex", null, "Ramp (U = half lambert)");
             }
 
-            EditorGUILayout.BeginVertical(EditorStyles.helpBox);
+            Separator();
             SubHeader(ramp ? "1st Shadow (ramp replaces the colours)" : "1st Shadow");
             if (!ramp)
             {
@@ -1121,11 +1127,10 @@ namespace NW.FairyToon.Editor
             P("_ShadowNormalStrength");
             P("_ShadowReceive");
             P("_CharShadowReceive", "Character Shadow");
-            EditorGUILayout.EndVertical();
 
             if (!ramp)
             {
-                EditorGUILayout.BeginVertical(EditorStyles.helpBox);
+                Separator();
                 SubHeader("2nd Shadow");
                 Tex("_Shadow2ndColorTex", null, "Color (A = strength)");
                 P("_Shadow2ndColor", "Color (A = strength)");
@@ -1133,8 +1138,7 @@ namespace NW.FairyToon.Editor
                 P("_Shadow2ndBlur", "Blur");
                 P("_Shadow2ndNormalStrength", "Normal Strength");
                 P("_Shadow2ndReceive", "Receive Shadow");
-                EditorGUILayout.EndVertical();
-                EditorGUILayout.BeginVertical(EditorStyles.helpBox);
+                Separator();
                 SubHeader("3rd Shadow");
                 Tex("_Shadow3rdColorTex", null, "Color (A = strength)");
                 P("_Shadow3rdColor", "Color (A = strength)");
@@ -1142,7 +1146,6 @@ namespace NW.FairyToon.Editor
                 P("_Shadow3rdBlur", "Blur");
                 P("_Shadow3rdNormalStrength", "Normal Strength");
                 P("_Shadow3rdReceive", "Receive Shadow");
-                EditorGUILayout.EndVertical();
             }
 
             P("_ShadowMainStrength");
@@ -1742,19 +1745,12 @@ namespace NW.FairyToon.Editor
         private void Refraction()
         {
 
-            if (!SearchAllows("_RefractionStrength", "_RefractionFresnelPower", "_RefractionColorFromMain", "_RefractionColor", "_RefractionBlur", "_SmoothnessTex", "_Smoothness", "_RefractionStrength|Strength", "_RefractionFresnelPower|Fresnel Power", "_RefractionColorFromMain|sColorFromMain", "_RefractionColor|Color", "_RefractionBlur|Blur", "_SmoothnessTex|Blur Smoothness")) return;
-            if (!BeginSection("Refraction", "sRefractionSetting", null, true, PropertyBlock.Refraction)) return;
-            EditorGUILayout.LabelField(FairyToonL10n.Text("sRefraction"));
+            if (!SearchAllows("_RefractionStrength", "_RefractionFresnelPower", "_RefractionColorFromMain", "_RefractionColor", "_RefractionStrength|Strength", "_RefractionFresnelPower|Fresnel Power", "_RefractionColorFromMain|sColorFromMain", "_RefractionColor|Color")) return;
+            if (!BeginSection("Refraction", "sRefraction", null, true, PropertyBlock.Refraction)) return;
             P("_RefractionStrength", "sStrength");
             P("_RefractionFresnelPower", "sFresnel");
             P("_RefractionColorFromMain", "sColorFromMain");
             P("_RefractionColor", "Color");
-            P("_RefractionBlur", "Blur");
-            if (Float("_RefractionBlur") > 0.5f || Prop("_RefractionBlur")?.hasMixedValue == true)
-            {
-                Tex("_SmoothnessTex", "_Smoothness", "Blur Smoothness");
-                ScaleOffset("_SmoothnessTex");
-            }
             EndSection();
         }
 
@@ -1792,26 +1788,28 @@ namespace NW.FairyToon.Editor
         {
 
             if (!SearchAllows("_RefractionStrength", "_RefractionFresnelPower", "_GemChromaticAberration", "_GemEnvContrast", "_GemEnvColor", "_GemParticleLoop", "_GemParticleColor", "_GemVRParallaxStrength", "_SmoothnessTex", "_Smoothness", "_Reflectance", "_ReflectionCubeOverride", "_ReflectionCubeTex", "_ReflectionCubeEnableLighting", "|sFallbackLighting", "|sEnvironmentColor", "|sCubemapFallback", "|sFresnel", "_RefractionStrength|Refraction Strength", "_RefractionFresnelPower|Refraction Fresnel Power", "_GemChromaticAberration|Chromatic Aberration", "_GemEnvContrast|Environment Contrast", "_GemEnvColor|Environment Color", "_GemParticleLoop|Particle Loop", "_GemParticleColor|Particle Color", "_GemVRParallaxStrength|VR Parallax Strength", "_SmoothnessTex|Smoothness", "_Reflectance|Reflectance", "_ReflectionCubeOverride|Override Cubemap", "_ReflectionCubeTex|Reflection Cubemap")) return;
-            if (!BeginSection("Gem", "sGemSetting", null, true, PropertyBlock.Gem)) return;
-            EditorGUILayout.BeginVertical(EditorStyles.helpBox);
-            EditorGUILayout.LabelField(FairyToonL10n.Text("sRefraction"));
+            if (!BeginSection("Gem", "sGem", null, true, PropertyBlock.Gem)) return;
+            EditorGUILayout.LabelField(FairyToonL10n.Text("sRefraction"), EditorStyles.boldLabel);
+            EditorGUI.indentLevel++;
             P("_RefractionStrength", "sStrength");
             P("_RefractionFresnelPower", "sFresnel");
-            EditorGUILayout.EndVertical();
-            EditorGUILayout.BeginVertical(EditorStyles.helpBox);
-            EditorGUILayout.LabelField(FairyToonL10n.Text("sGem"));
+            EditorGUI.indentLevel--;
+            Separator();
+            EditorGUILayout.LabelField(FairyToonL10n.Text("sGem"), EditorStyles.boldLabel);
+            EditorGUI.indentLevel++;
             P("_GemChromaticAberration", "sChromaticAberration");
             P("_GemEnvContrast", "sContrast");
             P("_GemEnvColor", "sEnvironmentColor");
             P("_GemParticleLoop", "sParticleLoop");
             P("_GemParticleColor", "sColor");
+            EditorGUI.indentLevel--;
+            Separator();
             P("_GemVRParallaxStrength", "sVRParallaxStrength");
             Tex("_SmoothnessTex", "_Smoothness", "sSmoothness");
             P("_Reflectance", "sReflectance");
             Tex("_ReflectionCubeTex", "_ReflectionCubeColor", "sCubemapFallback");
             P("_ReflectionCubeOverride", "sOverride");
             P("_ReflectionCubeEnableLighting", "sFallbackLighting");
-            EditorGUILayout.EndVertical();
             EndSection();
         }
 
@@ -1938,8 +1936,6 @@ namespace NW.FairyToon.Editor
                 }
                 m_Props = MaterialEditor.GetMaterialProperties(m_Editor.targets);
             }
-            EditorGUILayout.BeginVertical(s_Box);
-            EditorGUILayout.LabelField(FairyToonL10n.Text("sRendering"));
             P("_Cull");
             DrawZWrite();
             P("_ZTest");
@@ -1983,7 +1979,6 @@ namespace NW.FairyToon.Editor
                 P("_DstBlendAlpha");
             }
 
-            EditorGUILayout.EndVertical();
             EndSection();
         }
 
@@ -2104,63 +2099,61 @@ namespace NW.FairyToon.Editor
 
         private void BeginGearRow(string titleKey, PropertyBlock block)
         {
-            EditorGUILayout.BeginVertical(s_Box);
-            Rect rect = GUILayoutUtility.GetRect(16f, 18f, GUILayout.ExpandWidth(true));
-            Rect gear = new Rect(rect.xMax - 22f, rect.y, 20f, rect.height);
-            GUI.Label(new Rect(rect.x, rect.y, Mathf.Max(0f, gear.x - rect.x - 2f), rect.height), FairyToonL10n.Text(titleKey), s_HeaderLabel);
-            if (GUI.Button(gear, EditorGUIUtility.IconContent("_Popup"), s_Gear))
-                FairyToonClipboard.ShowMenu(block, m_Editor, () => m_Props);
+            OpenBox(FairyToonL10n.Text(titleKey), null, block);
         }
 
-        private static void EndGearRow() => EditorGUILayout.EndVertical();
+        private void EndGearRow() => CloseBox();
 
         private bool BeginSection(string key, string title, MaterialProperty toggle = null, bool openByDefault = false,
-            PropertyBlock? block = null, bool foldout = true)
+            PropertyBlock? block = null, bool foldout = true, bool frame = true)
         {
             string prefsKey = PrefsPrefix + "Foldout." + key;
             bool open = !foldout || EditorPrefs.GetBool(prefsKey, openByDefault);
             string shown = FairyToonL10n.Text(title);
-            if (!foldout)
+            if (foldout)
             {
-                EditorGUILayout.BeginVertical(s_Box);
-                if (toggle != null && !DrawFeatureToggle(shown, toggle, block))
+                EditorGUILayout.Space(2f);
+                Rect rect = GUILayoutUtility.GetRect(16f, 22f, GUILayout.ExpandWidth(true));
+                if (s_Foldout != null) GUI.Box(rect, GUIContent.none, s_Foldout);
+                float x = rect.x + 4f;
+                Rect arrow = new Rect(x, rect.y + 3f, 14f, 16f);
+                x += 16f;
+                Rect gear = new Rect(rect.xMax - 22f, rect.y + 1f, 20f, rect.height - 2f);
+                GUI.Label(new Rect(x, rect.y, Mathf.Max(0f, gear.x - x - 2f), rect.height), shown, s_HeaderLabel);
+                Event e = Event.current;
+                if (block.HasValue && GUI.Button(gear, EditorGUIUtility.IconContent("_Popup"), s_Gear))
+                    FairyToonClipboard.ShowMenu(block.Value, m_Editor, () => m_Props);
+                Rect click = rect;
+                click.width = Mathf.Max(0f, click.width - 24f);
+                if (e.type == EventType.MouseDown && e.button == 0 && click.Contains(e.mousePosition))
                 {
-                    EditorGUILayout.EndVertical();
-                    return false;
+                    EditorPrefs.SetBool(prefsKey, open = !open);
+                    e.Use();
                 }
-                EditorGUILayout.BeginVertical(EditorStyles.helpBox);
-                m_InnerDepth++;
+                if (e.type == EventType.Repaint) EditorStyles.foldout.Draw(arrow, false, false, open, false);
+            }
+            if (!open) return false;
+            if (!frame)
+            {
+                m_Frames.Add(false);
                 return true;
             }
-            EditorGUILayout.Space(2f);
-            Rect rect = GUILayoutUtility.GetRect(16f, 22f, GUILayout.ExpandWidth(true));
-            if (s_Foldout != null) GUI.Box(rect, GUIContent.none, s_Foldout);
+            if (!OpenBox(shown, toggle, block)) return false;
+            m_Frames.Add(true);
+            return true;
+        }
 
-            float x = rect.x + 4f;
-            Rect arrow = new Rect(x, rect.y + 3f, 14f, 16f);
-            x += 16f;
-            Rect gear = new Rect(rect.xMax - 22f, rect.y + 1f, 20f, rect.height - 2f);
-            GUI.Label(new Rect(x, rect.y, Mathf.Max(0f, gear.x - x - 2f), rect.height), shown, s_HeaderLabel);
-
-            Event e = Event.current;
-            if (block.HasValue && GUI.Button(gear, EditorGUIUtility.IconContent("_Popup"), s_Gear))
-                FairyToonClipboard.ShowMenu(block.Value, m_Editor, () => m_Props);
-            Rect click = rect;
-            click.width = Mathf.Max(0f, click.width - 24f);
-            if (e.type == EventType.MouseDown && e.button == 0 && click.Contains(e.mousePosition))
-            {
-                EditorPrefs.SetBool(prefsKey, open = !open);
-                e.Use();
-            }
-            if (e.type == EventType.Repaint) EditorStyles.foldout.Draw(arrow, false, false, open, false);
-
-            if (!open) return false;
-            EditorGUILayout.BeginVertical(s_Box);
+        // Outer fill is the measured title-bar colour. The inner fill is the darker content, inset so the outer colour reads as a 2px outline.
+        private bool OpenBox(string shown, MaterialProperty toggle, PropertyBlock? block)
+        {
+            EditorGUILayout.Space(3f);
+            EditorGUILayout.BeginVertical(s_Outer);
+            Rect row = GUILayoutUtility.GetRect(16f, 22f, GUILayout.ExpandWidth(true));
+            float x = row.x + 4f;
+            bool enabled = true;
             if (toggle != null)
             {
-                Rect row = EditorGUILayout.GetControlRect();
-                Rect innerGear = new Rect(row.xMax - 22f, row.y, 20f, row.height);
-                Rect toggleRect = new Rect(row.x + 2f, row.y, 16f, row.height);
+                Rect toggleRect = new Rect(x, row.y + 3f, 16f, 16f);
                 BeginScope(toggleRect, toggle);
                 EditorGUI.showMixedValue = toggle.hasMixedValue;
                 EditorGUI.BeginChangeCheck();
@@ -2168,39 +2161,24 @@ namespace NW.FairyToon.Editor
                 if (EditorGUI.EndChangeCheck()) SetNumber(toggle, value ? 1f : 0f);
                 EditorGUI.showMixedValue = false;
                 EndScope();
-                GUI.Label(new Rect(toggleRect.xMax + 4f, row.y, innerGear.x - toggleRect.xMax - 8f, row.height), shown);
-                if (block.HasValue && GUI.Button(innerGear, EditorGUIUtility.IconContent("_Popup"), s_Gear))
-                    FairyToonClipboard.ShowMenu(block.Value, m_Editor, () => m_Props);
-                if (!toggle.hasMixedValue && Number(toggle) <= 0.5f)
-                {
-                    EditorGUILayout.EndVertical();
-                    return false;
-                }
+                enabled = toggle.hasMixedValue || Number(toggle) > 0.5f;
+                x += 20f;
             }
-            EditorGUILayout.BeginVertical(EditorStyles.helpBox);
+            Rect gear = new Rect(row.xMax - 22f, row.y, 20f, row.height);
+            GUI.Label(new Rect(x, row.y, Mathf.Max(0f, gear.x - x - 2f), row.height), shown, s_HeaderLabel);
+            if (block.HasValue && GUI.Button(gear, EditorGUIUtility.IconContent("_Popup"), s_Gear))
+                FairyToonClipboard.ShowMenu(block.Value, m_Editor, () => m_Props);
+            if (!enabled)
+            {
+                EditorGUILayout.EndVertical();
+                return false;
+            }
+            EditorGUILayout.BeginVertical(s_Inner);
             m_InnerDepth++;
             return true;
         }
 
-        private bool DrawFeatureToggle(string shown, MaterialProperty toggle, PropertyBlock? block)
-        {
-            Rect row = EditorGUILayout.GetControlRect();
-            Rect innerGear = new Rect(row.xMax - 22f, row.y, 20f, row.height);
-            Rect toggleRect = new Rect(row.x + 2f, row.y, 16f, row.height);
-            BeginScope(toggleRect, toggle);
-            EditorGUI.showMixedValue = toggle.hasMixedValue;
-            EditorGUI.BeginChangeCheck();
-            bool value = EditorGUI.Toggle(toggleRect, Number(toggle) > 0.5f);
-            if (EditorGUI.EndChangeCheck()) SetNumber(toggle, value ? 1f : 0f);
-            EditorGUI.showMixedValue = false;
-            EndScope();
-            GUI.Label(new Rect(toggleRect.xMax + 4f, row.y, innerGear.x - toggleRect.xMax - 8f, row.height), shown);
-            if (block.HasValue && GUI.Button(innerGear, EditorGUIUtility.IconContent("_Popup"), s_Gear))
-                FairyToonClipboard.ShowMenu(block.Value, m_Editor, () => m_Props);
-            return toggle.hasMixedValue || Number(toggle) > 0.5f;
-        }
-
-        private void EndSection()
+        private void CloseBox()
         {
             if (m_InnerDepth > 0)
             {
@@ -2208,6 +2186,20 @@ namespace NW.FairyToon.Editor
                 m_InnerDepth--;
             }
             EditorGUILayout.EndVertical();
+        }
+
+        private void EndSection()
+        {
+            if (m_Frames.Count == 0) return;
+            bool framed = m_Frames[m_Frames.Count - 1];
+            m_Frames.RemoveAt(m_Frames.Count - 1);
+            if (framed) CloseBox();
+        }
+
+        private void Separator()
+        {
+            Rect rect = EditorGUILayout.GetControlRect(false, 1f);
+            if (Event.current.type == EventType.Repaint) EditorGUI.DrawRect(rect, s_Line);
         }
 
         private void HsvgSliders(string name)
@@ -2982,8 +2974,38 @@ namespace NW.FairyToon.Editor
             }
             s_HeaderLabel = new GUIStyle(EditorStyles.label) { alignment = TextAnchor.MiddleLeft, fontStyle = FontStyle.Normal };
             s_HeaderLabel.normal.textColor = s_Foldout.normal.textColor;
-            s_Box = new GUIStyle(EditorStyles.helpBox) { padding = new RectOffset(8, 6, 4, 6) };
+            if (s_OuterTex != null) UnityEngine.Object.DestroyImmediate(s_OuterTex);
+            if (s_InnerTex != null) UnityEngine.Object.DestroyImmediate(s_InnerTex);
+            // Dark values are the measured lilToon 2.4.1 inspector at 150% scale. Light uses the same two-fill structure.
+            Color title = s_ProSkin ? new Color32(90, 89, 90, 255) : new Color32(255, 255, 255, 255);
+            Color content = s_ProSkin ? new Color32(57, 56, 57, 255) : new Color32(232, 232, 232, 255);
+            s_Line = title;
+            s_OuterTex = Solid(title);
+            s_InnerTex = Solid(content);
+            s_Outer = new GUIStyle
+            {
+                margin = new RectOffset(4, 4, 0, 4),
+                padding = new RectOffset(2, 2, 2, 2)
+            };
+            s_Outer.normal.background = s_OuterTex;
+            s_Inner = new GUIStyle { padding = new RectOffset(6, 4, 4, 4) };
+            s_Inner.normal.background = s_InnerTex;
+            s_Box = s_Outer;
             s_Gear = new GUIStyle(GUIStyle.none) { alignment = TextAnchor.MiddleCenter };
+        }
+
+        private static Texture2D Solid(Color color)
+        {
+            var texture = new Texture2D(4, 4, TextureFormat.RGBA32, false)
+            {
+                hideFlags = HideFlags.HideAndDontSave,
+                wrapMode = TextureWrapMode.Clamp
+            };
+            var pixels = new Color[16];
+            for (int i = 0; i < pixels.Length; i++) pixels[i] = color;
+            texture.SetPixels(pixels);
+            texture.Apply();
+            return texture;
         }
     }
 }
