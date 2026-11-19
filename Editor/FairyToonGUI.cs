@@ -537,6 +537,10 @@ namespace NW.FairyToon.Editor
 
         private static bool Hit(string text) => !string.IsNullOrEmpty(text) && text.IndexOf(s_Search, StringComparison.Ordinal) >= 0;
 
+        /// <summary>The query contains the whole phrase, so a short word such as Offset does not open a longer Alpha Mask label.</summary>
+        private bool Phrase(string phrase) =>
+            Searching && !string.IsNullOrEmpty(phrase) && s_Search.IndexOf(phrase, StringComparison.OrdinalIgnoreCase) >= 0;
+
         /// <summary>True when this row would be drawn and its property name or final label contains the query.</summary>
         private bool LabelOnly(string key)
         {
@@ -663,7 +667,8 @@ namespace NW.FairyToon.Editor
             bool first = gem
                 ? SearchAllows("_MainTex", "_Color", "|ft.Tiling", "|ft.Offset")
                 : SearchAllows("_MainTex", "_Color", "_MainTexHSVG", "_MainColorAdjustMask", "|ft.Tiling", "|ft.Offset", "|sReset");
-            bool alpha = SearchAllows("_AlphaMaskMode", "_AlphaMask", "_AlphaMaskScale", "_AlphaMaskValue", "_Cutoff", "|sAlphaMaskWarnOpaque", "|ft.AlphaMaskInvert", "|ft.AlphaMaskTransparency", "|ft.AlphaMaskAdvanced", "|Alpha Mask Offset");
+            bool alpha = SearchAllows("_AlphaMaskMode", "_AlphaMask", "_AlphaMaskScale", "_AlphaMaskValue", "_Cutoff", "|sAlphaMaskWarnOpaque", "|ft.AlphaMaskInvert", "|ft.AlphaMaskTransparency", "|ft.AlphaMaskAdvanced")
+                || Phrase("Alpha Mask Scale") || Phrase("Alpha Mask Offset");
             bool second = PrefixMatches("_Main2nd") || PrefixMatches("_FT_Main2nd") || SearchAllows("_Color2nd", "_UseMain2ndTex", "|UV Line Angle (radians)", "|Position / Direction (XY UV, XYZ Object, W UV Angle)", "|ft.Tiling", "|ft.Offset", "|Decal", "|sMirrorMode", "|sCopyMode", "|sPositionX", "|sPositionY", "|sScaleX", "|sScaleY", "|sScroll", "|sRotate");
             bool third = PrefixMatches("_Main3rd") || PrefixMatches("_FT_Main3rd") || SearchAllows("_Color3rd", "_UseMain3rdTex", "|UV Line Angle (radians)", "|Position / Direction (XY UV, XYZ Object, W UV Angle)", "|ft.Tiling", "|ft.Offset", "|Decal", "|sMirrorMode", "|sCopyMode", "|sPositionX", "|sPositionY", "|sScaleX", "|sScaleY", "|sScroll", "|sRotate");
             if (Searching && !first && !alpha && !second && !third) return;
@@ -775,17 +780,18 @@ namespace NW.FairyToon.Editor
                 }
                 if (Prop("_Cutoff") != null) P("_Cutoff");
                 string advancedLabel = Event.current.alt ? "_AlphaMaskScale, _AlphaMaskValue" : FairyToonL10n.Text("ft.AlphaMaskAdvanced");
-                bool namedOffset = Searching && s_Search.IndexOf("Alpha Mask Offset", StringComparison.OrdinalIgnoreCase) >= 0;
-                bool showAdvanced = !Searching || namedOffset || Hit(advancedLabel) || Hit("_AlphaMaskScale") || Hit("_AlphaMaskValue");
-                if (showAdvanced && !Searching)
+                bool namedScale = Phrase("Alpha Mask Scale");
+                bool namedOffset = Phrase("Alpha Mask Offset");
+                bool showAdvanced = !Searching || namedScale || namedOffset || Hit(advancedLabel) || Hit("_AlphaMaskScale") || Hit("_AlphaMaskValue");
+                if (showAdvanced)
                     m_AlphaMaskAdvanced = EditorGUILayout.Toggle(advancedLabel, m_AlphaMaskAdvanced);
-                else if (showAdvanced)
-                    m_AlphaMaskAdvanced = EditorGUILayout.Toggle(advancedLabel, m_AlphaMaskAdvanced);
-                if (showAdvanced && (m_AlphaMaskAdvanced || namedOffset))
+                if (showAdvanced && (m_AlphaMaskAdvanced || namedScale || namedOffset))
                 {
                     EditorGUI.indentLevel++;
-                    P("_AlphaMaskScale", "Scale");
-                    P("_AlphaMaskValue", "Offset");
+                    if (!Searching || m_AlphaMaskAdvanced || namedScale || Hit("_AlphaMaskScale"))
+                        P("_AlphaMaskScale", "Scale");
+                    if (!Searching || m_AlphaMaskAdvanced || namedOffset || Hit("_AlphaMaskValue"))
+                        P("_AlphaMaskValue", "Offset");
                     EditorGUI.indentLevel--;
                 }
             }
@@ -1648,7 +1654,7 @@ namespace NW.FairyToon.Editor
         private void RimLight()
         {
 
-            if (!SearchAllows("_UseRim", "_RimColorTex", "_RimColor", "_RimBorder", "_RimBlur", "_RimFresnelPower", "_RimShadowMask", "_RimMainStrength", "_RimNormalStrength", "_RimEnableLighting", "_RimBackfaceMask", "_RimApplyTransparency", "_RimBlendMode", "_RimDirStrength", "_RimDirRange", "_RimIndirRange", "_RimIndirColor", "_RimIndirBorder", "_RimIndirBlur", "_RimColorTex|Color")) return;
+            if (!SearchAllows("_UseRim", "_RimColorTex", "_RimColor", "_RimBorder", "_RimBlur", "_RimFresnelPower", "_RimShadowMask", "_RimMainStrength", "_RimNormalStrength", "_RimEnableLighting", "_RimBackfaceMask", "_RimApplyTransparency", "_RimBlendMode", "_RimDirStrength", "_RimDirRange", "_RimIndirRange", "_RimIndirColor", "_RimIndirBorder", "_RimIndirBlur", "_RimColorTex|Color / Mask")) return;
             if (!BeginSection("Rim", "sRimLightSetting", Prop("_UseRim"), false, PropertyBlock.RimLight)) return;
             Tex("_RimColorTex", "_RimColor", "Color / Mask");
             ColorAlpha("_RimColor");
@@ -1737,7 +1743,7 @@ namespace NW.FairyToon.Editor
         private void Outline()
         {
 
-            if (!SearchAllows("_UseOutline", "_ShadingModel", "_EFOutlineColor", "_EFOutlineSaturation", "_EFOutlineEdge", "_EFOutlineFlatten", "_EFOutlinePull", "_OutlineTex", "_OutlineColor", "_OutlineMode", "_OutlineWidthMask", "_OutlinePixelWidth", "_OutlineMinPixels", "_OutlineFadeStart", "_OutlineFadeEnd", "_OutlineWidth", "_OutlineFixWidth", "_OutlineVertexR2Width", "_OutlineCornerTaper", "_OutlineZBias", "_OutlineEnableLighting", "_OutlineCull", "|ft.Tiling", "|ft.Offset", "_EFOutlineColor|Tint (x local shadow colour)", "_EFOutlineSaturation|Saturation", "_EFOutlineEdge|Edge Tint (A strength)", "_EFOutlineFlatten|Flatten (towards mid grey)", "_EFOutlinePull|Tint Pull (A amount)", "_OutlineTex|Color", "_OutlineWidthMask|Width (px at 1080p)", "_OutlineWidthMask|Width (cm)")) return;
+            if (!SearchAllows("_UseOutline", "_ShadingModel", "_EFOutlineColor", "_EFOutlineSaturation", "_EFOutlineEdge", "_EFOutlineFlatten", "_EFOutlinePull", "_OutlineTex", "_OutlineColor", "_OutlineMode", "_OutlineWidthMask", "_OutlinePixelWidth", "_OutlineMinPixels", "_OutlineFadeStart", "_OutlineFadeEnd", "_OutlineWidth", "_OutlineFixWidth", "_OutlineVertexR2Width", "_OutlineCornerTaper", "_OutlineZBias", "_OutlineEnableLighting", "|ft.Tiling", "|ft.Offset", "_EFOutlineColor|Tint (x local shadow colour)", "_EFOutlineSaturation|Saturation", "_EFOutlineEdge|Edge Tint (A strength)", "_EFOutlineFlatten|Flatten (towards mid grey)", "_EFOutlinePull|Tint Pull (A amount)", "_OutlineTex|Color", "_OutlineWidthMask|Width (px at 1080p)", "_OutlineWidthMask|Width (cm)")) return;
             if (!BeginSection("Outline", "sOutlineSetting", Prop("_UseOutline"), false, PropertyBlock.Outline)) return;
             bool mixedShade = Prop("_ShadingModel") != null && Prop("_ShadingModel").hasMixedValue;
             bool endfield = mixedShade || Float("_ShadingModel") > 0.5f;
@@ -2395,8 +2401,8 @@ namespace NW.FairyToon.Editor
             var property = Prop("_FurVector");
             if (property == null) return;
             Vector4 value = property.vectorValue;
-            bool showDirection = !Searching || LabelOnly("sVectorTex") || (!LabelOnly("sLength") && !LabelOnly("sVectorTex"));
-            bool showLength = !Searching || LabelOnly("sLength") || (!LabelOnly("sLength") && !LabelOnly("sVectorTex"));
+            bool showDirection = !Searching || LabelOnly("sVectorTex");
+            bool showLength = !Searching || LabelOnly("sLength");
             if (!showDirection && !showLength) return;
             if (showDirection)
             {
