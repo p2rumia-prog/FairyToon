@@ -1033,15 +1033,15 @@ namespace NW.FairyToon.Editor
             var block = second ? PropertyBlock.Emission2nd : PropertyBlock.Emission1st;
             if (!BeginSection(prefs, title, Prop(second ? "_UseEmission2nd" : "_UseEmission"), false, block)) return;
             Tex(prefix + "Map", prefix + "Color", "Color");
-            P(prefix + "Blend", "Blend");
+            P(prefix + "Blend", "sBlend");
+            P(prefix + "BlendMode", "sBlendMode");
+            P(prefix + "MainStrength", "sStrengthFromMain");
             ScaleOffset(prefix + "Map");
             P(prefix + "Map_UVMode", "UV Mode");
             P(prefix + "Map_ScrollRotate", "Scroll XY / Angle Z / Rotation Speed W");
-            Tex(prefix + "BlendMask", null, "Mask");
+            Tex(prefix + "BlendMask", null, "sMask");
             ScaleOffset(prefix + "BlendMask");
             P(prefix + "BlendMask_ScrollRotate", "Mask Scroll XY / Angle Z / Rotation Speed W");
-            P(prefix + "BlendMode", "sBlendMode");
-            P(prefix + "MainStrength", "Multiply Main Color");
             P(prefix + "Blink", "Blink Strength / Hard / Speed / Phase");
             P(prefix + "UseGrad", "Gradation");
             if (Float(prefix + "UseGrad") > 0.5f || Prop(prefix + "UseGrad").hasMixedValue)
@@ -1427,7 +1427,7 @@ namespace NW.FairyToon.Editor
         {
             string n = "_MatCap" + layer;
             Tex(n + "Tex", n + "Color", "sMatCap");
-            P(n + "Blend", "sStrength");
+            P(n + "Blend", "sMatCapBlend");
             P(n + "MainStrength", "sStrengthFromMain");
             P(n + "NormalStrength", "sNormalStrength");
             Tex(n + "BlendMask", null, "sMask");
@@ -1456,16 +1456,16 @@ namespace NW.FairyToon.Editor
             if (!BeginSection("Rim", "sRimLightSetting", Prop("_UseRim"), false, PropertyBlock.RimLight)) return;
             Tex("_RimColorTex", "_RimColor", "Color");
             ColorAlpha("_RimColor");
-            P("_RimBorder");
-            P("_RimBlur");
-            P("_RimFresnelPower");
-            P("_RimShadowMask");
-            P("_RimMainStrength");
-            P("_RimNormalStrength");
-            P("_RimEnableLighting");
-            P("_RimBackfaceMask");
-            P("_RimApplyTransparency");
-            P("_RimBlendMode");
+            P("_RimBorder", "sBorder");
+            P("_RimBlur", "sBlur");
+            P("_RimFresnelPower", "sFresnelPower");
+            P("_RimNormalStrength", "sNormalStrength");
+            P("_RimEnableLighting", "sEnableLighting");
+            P("_RimShadowMask", "sShadowMask");
+            P("_RimBackfaceMask", "sBackfaceMask");
+            P("_RimMainStrength", "sStrengthFromMain");
+            P("_RimApplyTransparency", "sApplyTransparency");
+            P("_RimBlendMode", "sBlendMode");
 
             SubHeader("Light Direction");
             P("_RimDirStrength");
@@ -1487,10 +1487,10 @@ namespace NW.FairyToon.Editor
             if (!SearchAllows("_UseRimShade", "_RimShadeMask", "_RimShadeColor", "_RimShadeBorder", "_RimShadeBlur", "_RimShadeFresnelPower", "_RimShadeNormalStrength", "_RimShadeMask|Color / Mask")) return;
             if (!BeginSection("RimShade", "sRimShadeSetting", Prop("_UseRimShade"), false, PropertyBlock.RimShade)) return;
             Tex("_RimShadeMask", "_RimShadeColor", "Color / Mask");
-            P("_RimShadeBorder");
-            P("_RimShadeBlur");
-            P("_RimShadeFresnelPower");
-            P("_RimShadeNormalStrength");
+            P("_RimShadeNormalStrength", "sNormalStrength");
+            P("_RimShadeBorder", "sBorder");
+            P("_RimShadeBlur", "sBlur");
+            P("_RimShadeFresnelPower", "sFresnelPower");
             EndSection();
         }
 
@@ -1586,8 +1586,8 @@ namespace NW.FairyToon.Editor
             if (!SearchAllows("_RefractionStrength", "_RefractionFresnelPower", "_RefractionColorFromMain", "_RefractionColor", "_RefractionBlur", "_SmoothnessTex", "_Smoothness", "_RefractionStrength|Strength", "_RefractionFresnelPower|Fresnel Power", "_RefractionColorFromMain|sColorFromMain", "_RefractionColor|Color", "_RefractionBlur|Blur", "_SmoothnessTex|Blur Smoothness")) return;
             if (!BeginSection("Refraction", "sRefractionSetting", null, true, PropertyBlock.Refraction)) return;
             Help("Refraction samples the opaque scene color. Transparent objects are not included.", MessageType.None);
-            P("_RefractionStrength", "Strength");
-            P("_RefractionFresnelPower", "Fresnel Power");
+            P("_RefractionStrength", "sStrength");
+            P("_RefractionFresnelPower", "sFresnelPower");
             P("_RefractionColorFromMain", "sColorFromMain");
             P("_RefractionColor", "Color");
             P("_RefractionBlur", "Blur");
@@ -1603,26 +1603,26 @@ namespace NW.FairyToon.Editor
         {
             var furMode = Prop("_FurMode");
             bool cutoutLength = furMode != null && (furMode.hasMixedValue || Number(furMode) > 1.5f);
-            bool furRows = SearchAllows("_FurMode|ft.FurMode", "_FurNoiseMask", "_FurMask", "_FurLengthMask", "_FurVectorTex", "_FurVectorScale", "_FurVector", "_VertexColor2FurVector", "_FurGravity", "_FurRandomize", "_FurAO", "_FurLayerNum", "_FurRootOffset", "_FurRimColor", "_FurRimFresnelPower", "_FurRimAntiLight", "_FurNoiseMask|Noise", "_FurMask|Mask", "_FurLengthMask|Length Mask", "_FurVectorTex|Vector", "_FurVector|Direction (XYZ), Length (W)", "_VertexColor2FurVector|Vertex Color To Vector", "_FurGravity|Gravity", "_FurRandomize|Randomize", "_FurAO|Ambient Occlusion", "_FurLayerNum|Layers", "_FurRootOffset|Root Width", "_FurCutoutLength|Cutout Length", "_FurRimColor|Color", "_FurRimFresnelPower|Fresnel Power", "_FurRimAntiLight|Anti Light");
+            bool furRows = SearchAllows("_FurMode|ft.FurMode", "_FurNoiseMask", "_FurMask", "_FurLengthMask", "_FurVectorTex", "_FurVectorScale", "_FurVector", "_VertexColor2FurVector", "_FurGravity", "_FurRandomize", "_FurAO", "_FurLayerNum", "_FurRootOffset", "_FurRimColor", "_FurRimFresnelPower", "_FurRimAntiLight", "_FurVectorTex|sVectorTex", "_FurLengthMask|sLengthMask", "_FurVector|sFurVector", "_VertexColor2FurVector|sVertexColor2Vector", "_FurGravity|sGravity", "_FurRandomize|sRandomize", "_FurNoiseMask|sNoise", "_FurMask|sMask", "_FurAO|sAmbientOcclusion", "_FurLayerNum|sLayerNum", "_FurRootOffset|sRootWidth", "_FurCutoutLength|sCutoutLength", "_FurRimColor|Color", "_FurRimFresnelPower|sFresnelPower", "_FurRimAntiLight|Anti Light");
             if (!furRows && !(cutoutLength && SearchAllows("_FurCutoutLength"))) return;
             if (!BeginSection("Fur", "sFurSetting", null, true, PropertyBlock.Fur)) return;
             FurMode();
             Help("Fur does not render Outline or See-through Hair. Their settings are kept when switching modes.", MessageType.None);
-            Tex("_FurNoiseMask", null, "Noise");
-            ScaleOffset("_FurNoiseMask");
-            Tex("_FurMask", null, "Mask");
-            Tex("_FurLengthMask", null, "Length Mask");
-            Tex("_FurVectorTex", "_FurVectorScale", "Vector");
-            P("_FurVector", "Direction (XYZ), Length (W)");
-            P("_VertexColor2FurVector", "Vertex Color To Vector");
-            P("_FurGravity", "Gravity");
-            P("_FurRandomize", "Randomize");
-            P("_FurAO", "Ambient Occlusion");
-            P("_FurLayerNum", "Layers");
-            P("_FurRootOffset", "Root Width");
+            Tex("_FurVectorTex", "_FurVectorScale", "sVectorTex");
+            Tex("_FurLengthMask", null, "sLengthMask");
+            P("_FurVector", "sFurVector");
             if (cutoutLength)
-                P("_FurCutoutLength", "Cutout Length");
-            SubHeader("Rim");
+                P("_FurCutoutLength", "sCutoutLength");
+            P("_VertexColor2FurVector", "sVertexColor2Vector");
+            P("_FurGravity", "sGravity");
+            P("_FurRandomize", "sRandomize");
+            Tex("_FurNoiseMask", null, "sNoise");
+            ScaleOffset("_FurNoiseMask");
+            Tex("_FurMask", null, "sMask");
+            P("_FurAO", "sAmbientOcclusion");
+            P("_FurLayerNum", "sLayerNum");
+            P("_FurRootOffset", "sRootWidth");
+            SubHeader("sRimLight");
             P("_FurRimColor", "Color");
             P("_FurRimFresnelPower", "Fresnel Power");
             P("_FurRimAntiLight", "Anti Light");
