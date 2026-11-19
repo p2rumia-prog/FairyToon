@@ -596,7 +596,7 @@ Shader "FairyToon"
             #include_with_pragmas "Packages/com.unity.render-pipelines.universal/ShaderLibrary/Fog.hlsl"
             #include_with_pragmas "Packages/com.unity.render-pipelines.universal/ShaderLibrary/ProbeVolumeVariants.hlsl"
             #pragma multi_compile_instancing
-
+            #pragma instancing_options renderinglayer
             #define FAIRYTOON_PASS_FORWARD
             #include "FairyToonPasses.hlsl"
             ENDHLSL
@@ -636,7 +636,7 @@ Shader "FairyToon"
             #include_with_pragmas "Packages/com.unity.render-pipelines.universal/ShaderLibrary/Fog.hlsl"
             #include_with_pragmas "Packages/com.unity.render-pipelines.universal/ShaderLibrary/ProbeVolumeVariants.hlsl"
             #pragma multi_compile_instancing
-
+            #pragma instancing_options renderinglayer
             #define FAIRYTOON_PASS_OUTLINE
             #include "FairyToonPasses.hlsl"
             ENDHLSL
@@ -919,7 +919,7 @@ Shader "FairyToon"
             #include_with_pragmas "Packages/com.unity.render-pipelines.universal/ShaderLibrary/Fog.hlsl"
             #include_with_pragmas "Packages/com.unity.render-pipelines.universal/ShaderLibrary/ProbeVolumeVariants.hlsl"
             #pragma multi_compile_instancing
-
+            #pragma instancing_options renderinglayer
             #define FAIRYTOON_PASS_FORWARD
             #define FAIRYTOON_SEETHROUGH_HAIR
             #include "FairyToonSeeThrough.hlsl"

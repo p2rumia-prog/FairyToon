@@ -214,6 +214,7 @@ A tight depth map per character, so the fringe, chin and hair shadow the charact
 
 - Put `FairyToonCharacter` on the avatar root (Cast Character Shadow on) and keep the **FairyToon** renderer feature; its Character Shadow settings hold the rest. Up to four characters share one 32-bit depth atlas (2048 / 4096 / 8192; 8192 is 256 MB).
 - Light: **Camera Aligned** (default, as in Endfield): a projector above the camera, yaw from the character's centre to the camera, pitch clamped to 30-35°, so shadows fall down and away from the viewer whatever the sun does; turning the camera without moving it changes nothing. **Main Light**: the sun, as a high-resolution self-shadow.
+- Camera Aligned samples each character’s own atlas tile. Main Light allows characters to cast shadows on each other.
 - Camera Fit fits each map to the part of the character in view, with snapped sizes and texel-snapped positions against shimmer.
 - Filtering: a 7×7 tent (16 bilinear compares, 64 depth tests), then a narrow smoothstep around the 0.5 contour, so the edge is a crisp toon line without stair steps even when a texel covers several pixels; Softness widens it back into a penumbra. The shadow fades in with `saturate(N·L × 4)` towards the projector, so the toon ramp alone shades the terminator.
 - Per material: `_CharShadowReceive` (0..1, default 1). Materials without FairyToon's `CharacterShadow` pass cast through a hidden opaque caster; transparent materials do not cast.
