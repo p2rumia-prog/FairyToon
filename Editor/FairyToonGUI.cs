@@ -20,41 +20,45 @@ namespace NW.FairyToon.Editor
             EditorGUI.showMixedValue = mixed;
         }
 
-        // Hex stores the colour divided by its peak channel, then the peak is multiplied back.
-        // A value above 1 survives an edit. The swatch itself is not Unity's HDR bar.
+        // Same layout as lilToon's lilHDRDrawer: a 50px colour field (eyedropper and HDR badge included)
+        // and a 50px hex field beside it. An 18px rect is too narrow for the eyedropper.
         internal static bool Draw(Rect position, string label, ref Color value)
         {
-            float peak = Mathf.Max(value.r, Mathf.Max(value.g, value.b));
-            float intensity = Mathf.Max(peak, 1f);
-            var unit = new Color(value.r / intensity, value.g / intensity, value.b / intensity, value.a);
-            bool wide = position.width >= 160f && !string.IsNullOrEmpty(label);
-            Rect swatch;
-            Rect hex;
-            if (wide)
-            {
-                var labelRect = position;
-                labelRect.width = Mathf.Max(0f, position.width - 96f);
-                swatch = new Rect(labelRect.xMax + 2f, position.y, 18f, position.height);
-                hex = new Rect(swatch.xMax + 2f, position.y, 70f, position.height);
-                EditorGUI.LabelField(labelRect, label);
-            }
-            else
-            {
-                swatch = new Rect(position.x, position.y, 18f, position.height);
-                hex = new Rect(swatch.xMax + 2f, position.y, Mathf.Max(0f, position.width - 20f), position.height);
-            }
+            float xMax = position.xMax;
+            bool labeled = !string.IsNullOrEmpty(label) && position.width > 120f;
+            position.width = labeled ? EditorGUIUtility.labelWidth + 50f : Mathf.Min(50f, position.width);
+            float intensity = value.maxColorComponent > 1f ? value.maxColorComponent : 1f;
             EditorGUI.BeginChangeCheck();
-            Color picked = EditorGUI.ColorField(swatch, GUIContent.none, unit, true, true, false);
-            string currentHex = ColorUtility.ToHtmlStringRGB(unit);
-            string written = EditorGUI.TextField(hex, currentHex);
-            if (!EditorGUI.EndChangeCheck()) return false;
-            if (written != currentHex)
+            Color picked = EditorGUI.ColorField(position, new GUIContent(labeled ? label : string.Empty), value, true, true, true);
+            bool colorChanged = EditorGUI.EndChangeCheck();
+            EditorGUI.BeginChangeCheck();
+            var unit = new Color(picked.r / intensity, picked.g / intensity, picked.b / intensity, 1f);
+            string hex = ColorUtility.ToHtmlStringRGB(unit);
+            int indent = EditorGUI.indentLevel;
+            EditorGUI.indentLevel = 0;
+            var hexRect = position;
+            hexRect.x += position.width + 4f;
+            hexRect.width = Mathf.Min(50f, xMax - hexRect.x);
+            if (hexRect.width > 10f) hex = EditorGUI.TextField(hexRect, GUIContent.none, "#" + hex);
+            EditorGUI.indentLevel = indent;
+            bool hexChanged = EditorGUI.EndChangeCheck();
+            if (hexChanged)
             {
-                if (!ColorUtility.TryParseHtmlString("#" + written, out Color parsed)) return false;
-                value = new Color(parsed.r * intensity, parsed.g * intensity, parsed.b * intensity, value.a);
+                if (!ColorUtility.TryParseHtmlString(hex, out Color parsed)) return colorChanged && Assign(ref value, picked);
+                picked.r = parsed.r * intensity;
+                picked.g = parsed.g * intensity;
+                picked.b = parsed.b * intensity;
+                value = picked;
                 return true;
             }
-            value = new Color(picked.r * intensity, picked.g * intensity, picked.b * intensity, picked.a);
+            if (!colorChanged) return false;
+            value = picked;
+            return true;
+        }
+
+        private static bool Assign(ref Color value, Color picked)
+        {
+            value = picked;
             return true;
         }
     }
@@ -2404,13 +2408,22 @@ namespace NW.FairyToon.Editor
             if (!RowVisible(name, shown, tooltip)) return;
             string tip = string.IsNullOrEmpty(tooltip) ? null : FairyToonL10n.Text(tooltip);
             if (DrawLocalizedEnum(prop, shown, tip)) return;
-            if (prop.propertyType == ShaderPropertyType.Color && (IsGammaHdr(name) || IsBuiltinHdr(name)))
+            if (prop.propertyType == ShaderPropertyType.Color)
             {
                 Rect row = EditorGUILayout.GetControlRect();
                 BeginScope(row, prop);
                 EditorGUI.showMixedValue = prop.hasMixedValue;
-                Color color = prop.colorValue;
-                if (FairyToonHDRDrawer.Draw(row, shown, ref color)) prop.colorValue = color;
+                if (IsGammaHdr(name) || IsBuiltinHdr(name))
+                {
+                    Color color = prop.colorValue;
+                    if (FairyToonHDRDrawer.Draw(row, shown, ref color)) prop.colorValue = color;
+                }
+                else
+                {
+                    EditorGUI.BeginChangeCheck();
+                    Color color = EditorGUI.ColorField(row, new GUIContent(shown, tip), prop.colorValue, true, true, false);
+                    if (EditorGUI.EndChangeCheck()) prop.colorValue = color;
+                }
                 EditorGUI.showMixedValue = false;
                 EndScope();
                 return;
@@ -2523,15 +2536,26 @@ namespace NW.FairyToon.Editor
             // These lilToon colours are gamma-authored even above 1; HDR editing must not add the native HDR flag.
             // TexturePropertySingleLine ignores custom drawers, so any [FairyToonHDR] colour takes the HDR picker here.
             var content = new GUIContent(shown);
-            bool hdr = other != null && (IsGammaHdr(extra) || IsBuiltinHdr(extra));
-            Rect row = m_Editor.TexturePropertySingleLine(content, tex, hdr ? null : other);
-            if (!hdr) return;
+            bool colorExtra = other != null && other.propertyType == ShaderPropertyType.Color;
+            Rect row = m_Editor.TexturePropertySingleLine(content, tex, colorExtra ? null : other);
+            if (!colorExtra) return;
+            bool hdr = IsGammaHdr(extra) || IsBuiltinHdr(extra);
             Rect slot = row;
-            slot.xMin = row.xMax - 92f;
+            slot.xMin = row.xMax - (hdr ? 108f : 54f);
             BeginScope(slot, other);
             EditorGUI.showMixedValue = other.hasMixedValue;
-            Color color = other.colorValue;
-            if (FairyToonHDRDrawer.Draw(slot, null, ref color)) other.colorValue = color;
+            if (hdr)
+            {
+                Color color = other.colorValue;
+                if (FairyToonHDRDrawer.Draw(slot, null, ref color)) other.colorValue = color;
+            }
+            else
+            {
+                var swatch = new Rect(slot.xMax - 50f, slot.y, 50f, slot.height);
+                EditorGUI.BeginChangeCheck();
+                Color color = EditorGUI.ColorField(swatch, GUIContent.none, other.colorValue, true, true, false);
+                if (EditorGUI.EndChangeCheck()) other.colorValue = color;
+            }
             EditorGUI.showMixedValue = false;
             EndScope();
         }
