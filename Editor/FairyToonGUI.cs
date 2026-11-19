@@ -641,8 +641,8 @@ namespace NW.FairyToon.Editor
                 ? SearchAllows("_MainTex", "_Color", "|ft.Tiling", "|ft.Offset")
                 : SearchAllows("_MainTex", "_Color", "_MainTexHSVG", "_MainColorAdjustMask", "|ft.Tiling", "|ft.Offset", "|sReset");
             bool alpha = SearchAllows("_AlphaMaskMode", "_AlphaMask", "_AlphaMaskScale", "_AlphaMaskValue", "_Cutoff", "|sAlphaMaskWarnOpaque", "|ft.AlphaMaskInvert", "|ft.AlphaMaskTransparency", "|ft.AlphaMaskAdvanced", "|ft.Offset", "|ft.Tiling");
-            bool second = PrefixMatches("_Main2nd") || PrefixMatches("_FT_Main2nd") || SearchAllows("_Color2nd", "_UseMain2ndTex", "|UV Line Angle (radians)", "|Position / Direction (XY UV, XYZ Object, W UV Angle)", "|ft.Tiling", "|ft.Offset", "|Decal", "|sMirrorMode", "|sCopyMode", "|Position X", "|Position Y", "|Scale X", "|Scale Y");
-            bool third = PrefixMatches("_Main3rd") || PrefixMatches("_FT_Main3rd") || SearchAllows("_Color3rd", "_UseMain3rdTex", "|UV Line Angle (radians)", "|Position / Direction (XY UV, XYZ Object, W UV Angle)", "|ft.Tiling", "|ft.Offset", "|Decal", "|sMirrorMode", "|sCopyMode", "|Position X", "|Position Y", "|Scale X", "|Scale Y");
+            bool second = PrefixMatches("_Main2nd") || PrefixMatches("_FT_Main2nd") || SearchAllows("_Color2nd", "_UseMain2ndTex", "|UV Line Angle (radians)", "|Position / Direction (XY UV, XYZ Object, W UV Angle)", "|ft.Tiling", "|ft.Offset", "|Decal", "|sMirrorMode", "|sCopyMode", "|Position X", "|Position Y", "|Scale X", "|Scale Y", "|sScroll", "|sRotate");
+            bool third = PrefixMatches("_Main3rd") || PrefixMatches("_FT_Main3rd") || SearchAllows("_Color3rd", "_UseMain3rdTex", "|UV Line Angle (radians)", "|Position / Direction (XY UV, XYZ Object, W UV Angle)", "|ft.Tiling", "|ft.Offset", "|Decal", "|sMirrorMode", "|sCopyMode", "|Position X", "|Position Y", "|Scale X", "|Scale Y", "|sScroll", "|sRotate");
             if (Searching && !first && !alpha && !second && !third) return;
             if (!BeginSection("Main", "sMainColorSetting", null, true, PropertyBlock.MainColor)) return;
             if (first) MainColorFirst();
@@ -752,8 +752,11 @@ namespace NW.FairyToon.Editor
                         WriteAlphaMask(scale, offset, invertChanged, transparencyChanged, invert, transparency);
                 }
                 if (Prop("_Cutoff") != null) P("_Cutoff");
-                m_AlphaMaskAdvanced = EditorGUILayout.Toggle(Event.current.alt ? "_AlphaMaskScale, _AlphaMaskValue" : FairyToonL10n.Text("ft.AlphaMaskAdvanced"), m_AlphaMaskAdvanced);
-                if (m_AlphaMaskAdvanced)
+                string advancedLabel = Event.current.alt ? "_AlphaMaskScale, _AlphaMaskValue" : FairyToonL10n.Text("ft.AlphaMaskAdvanced");
+                bool showAdvanced = !Searching || Hit(advancedLabel) || Hit("_AlphaMaskScale") || Hit("_AlphaMaskValue");
+                if (showAdvanced)
+                    m_AlphaMaskAdvanced = EditorGUILayout.Toggle(advancedLabel, m_AlphaMaskAdvanced);
+                if (showAdvanced && m_AlphaMaskAdvanced)
                 {
                     EditorGUI.indentLevel++;
                     P("_AlphaMaskScale", "Scale");
@@ -1364,7 +1367,7 @@ namespace NW.FairyToon.Editor
         private void NormalMaps()
         {
 
-            bool firstNormal = SearchAllows("_UseBumpMap", "_BumpMap", "_BumpScale", "_BumpMap|Normal Map", "_Bump2ndMap|Normal Map", "_Bump2ndScale", "_Bump2ndScaleMask|Scale Mask");
+            bool firstNormal = SearchAllows("_UseBumpMap", "_BumpMap", "_BumpScale", "_BumpMap|Normal Map", "_Bump2ndMap|Normal Map", "_Bump2ndScale", "_Bump2ndScaleMask|Scale Mask", "|ft.Tiling", "|ft.Offset");
             bool secondNormal = SearchAllows("_UseBump2ndMap", "_Bump2ndMap", "_Bump2ndScale", "_Bump2ndMap_UVMode", "_Bump2ndScaleMask", "|ft.Tiling", "|ft.Offset");
             if (!firstNormal && !secondNormal) return;
             if (firstNormal && BeginSection("Normal", "sNormalMapSetting", Prop("_UseBumpMap"), false, PropertyBlock.NormalMap1st))
@@ -1543,8 +1546,8 @@ namespace NW.FairyToon.Editor
         private void MatCap()
         {
 
-            bool firstCap = PrefixMatches("_MatCap", "_MatCap2nd") || SearchAllows("_UseMatCap");
-            bool secondCap = PrefixMatches("_MatCap2nd") || SearchAllows("_UseMatCap2nd");
+            bool firstCap = PrefixMatches("_MatCap", "_MatCap2nd") || SearchAllows("_UseMatCap", "|ft.Tiling", "|ft.Offset", "|sZRotCancel", "|sFixPerspective");
+            bool secondCap = PrefixMatches("_MatCap2nd") || SearchAllows("_UseMatCap2nd", "|ft.Tiling", "|ft.Offset", "|sZRotCancel", "|sFixPerspective");
             if (!firstCap && !secondCap) return;
             if (firstCap && BeginSection("MatCap", "sMatCap", Prop("_UseMatCap"), false, PropertyBlock.MatCap1st, false))
             {
@@ -1748,7 +1751,7 @@ namespace NW.FairyToon.Editor
         {
             var furMode = Prop("_FurMode");
             bool cutoutLength = furMode != null && (furMode.hasMixedValue || Number(furMode) > 1.5f);
-            bool furRows = SearchAllows("_FurMode|ft.FurMode", "_FurNoiseMask", "_FurMask", "_FurLengthMask", "_FurVectorTex", "_FurVectorScale", "_FurVector", "_VertexColor2FurVector", "_FurGravity", "_FurRandomize", "_FurAO", "_FurLayerNum", "_FurRootOffset", "_FurRimColor", "_FurRimFresnelPower", "_FurRimAntiLight", "_FurVectorTex|sVectorTex", "_FurLengthMask|sLengthMask", "_FurVector|sFurVector", "_VertexColor2FurVector|sVertexColor2Vector", "_FurGravity|sGravity", "_FurRandomize|sRandomize", "_FurNoiseMask|sNoise", "_FurMask|sMask", "_FurAO|sAmbientOcclusion", "_FurLayerNum|sLayerNum", "_FurRootOffset|sRootWidth", "_FurCutoutLength|sCutoutLength", "_FurRimColor|Color", "_FurRimFresnelPower|sFresnelPower", "_FurRimAntiLight|Anti Light");
+            bool furRows = SearchAllows("_FurMode|ft.FurMode", "_FurNoiseMask", "_FurMask", "_FurLengthMask", "_FurVectorTex", "_FurVectorScale", "_FurVector", "_VertexColor2FurVector", "_FurGravity", "_FurRandomize", "_FurAO", "_FurLayerNum", "_FurRootOffset", "_FurRimColor", "_FurRimFresnelPower", "_FurRimAntiLight", "_FurVectorTex|sVectorTex", "_FurLengthMask|sLengthMask", "_FurVector|sFurVector", "_VertexColor2FurVector|sVertexColor2Vector", "_FurGravity|sGravity", "_FurRandomize|sRandomize", "_FurNoiseMask|sNoise", "_FurMask|sMask", "_FurAO|sAmbientOcclusion", "_FurLayerNum|sLayerNum", "_FurRootOffset|sRootWidth", "_FurCutoutLength|sCutoutLength", "_FurRimColor|Color", "_FurRimFresnelPower|sFresnelPower", "_FurRimAntiLight|Anti Light", "|ft.Tiling", "|ft.Offset");
             if (!furRows && !(cutoutLength && SearchAllows("_FurCutoutLength"))) return;
             if (!BeginSection("Fur", "sFurSetting", null, true, PropertyBlock.Fur)) return;
             FurMode();
@@ -2224,34 +2227,43 @@ namespace NW.FairyToon.Editor
         private void ScrollAndRotate(string name)
         {
             var property = Prop(name);
-            if (property == null || !RowVisible(name, "sScroll")) return;
+            if (property == null) return;
+            bool showScroll = RowVisible(name, "sScroll");
+            bool showRotate = RowVisible(name, "sRotate");
+            if (!showScroll && !showRotate) return;
             Vector4 value = property.vectorValue;
-            Rect row = EditorGUILayout.GetControlRect();
-            BeginScope(row, property);
-            EditorGUI.BeginChangeCheck();
-            Vector2 before = new Vector2(value.x, value.y);
-            Vector2 scroll = EditorGUI.Vector2Field(row, FairyToonL10n.Text("sScroll"), before);
-            if (EditorGUI.EndChangeCheck())
+            if (showScroll)
             {
-                int mask = 0;
-                if (!Mathf.Approximately(scroll.x, before.x)) { value.x = scroll.x; mask |= 1; }
-                if (!Mathf.Approximately(scroll.y, before.y)) { value.y = scroll.y; mask |= 2; }
-                if (mask != 0) SetDissolveComponents(property, value, mask);
+                Rect row = EditorGUILayout.GetControlRect();
+                BeginScope(row, property);
+                EditorGUI.BeginChangeCheck();
+                Vector2 before = new Vector2(value.x, value.y);
+                Vector2 scroll = EditorGUI.Vector2Field(row, FairyToonL10n.Text("sScroll"), before);
+                if (EditorGUI.EndChangeCheck())
+                {
+                    int mask = 0;
+                    if (!Mathf.Approximately(scroll.x, before.x)) { value.x = scroll.x; mask |= 1; }
+                    if (!Mathf.Approximately(scroll.y, before.y)) { value.y = scroll.y; mask |= 2; }
+                    if (mask != 0) SetDissolveComponents(property, value, mask);
+                }
+                EndScope();
             }
-            EndScope();
-            row = EditorGUILayout.GetControlRect();
-            BeginScope(row, property);
-            EditorGUI.BeginChangeCheck();
-            float rotate = value.w / (Mathf.PI * 2f);
-            rotate = EditorGUI.FloatField(row, FairyToonL10n.Text("sRotate"), rotate);
-            if (EditorGUI.EndChangeCheck())
+            if (showRotate)
             {
-                value = property.vectorValue;
-                value.w = rotate * Mathf.PI * 2f;
-                SetDissolveComponents(property, value, 8);
+                Rect row = EditorGUILayout.GetControlRect();
+                BeginScope(row, property);
+                EditorGUI.BeginChangeCheck();
+                float rotate = value.w / (Mathf.PI * 2f);
+                rotate = EditorGUI.FloatField(row, FairyToonL10n.Text("sRotate"), rotate);
+                if (EditorGUI.EndChangeCheck())
+                {
+                    value = property.vectorValue;
+                    value.w = rotate * Mathf.PI * 2f;
+                    SetDissolveComponents(property, value, 8);
+                }
+                EndScope();
             }
-            EndScope();
-            if (GUILayout.Button(FairyToonL10n.Text("sReset")))
+            if ((!Searching || LabelOnly("sReset")) && GUILayout.Button(FairyToonL10n.Text("sReset")))
                 SetDissolveComponents(property, Vector4.zero, 15);
         }
 
