@@ -806,14 +806,36 @@ namespace NW.FairyToon.Editor
             return property.hasMixedValue;
         }
 
-        // MaterialProperty only accepts the whole vector. Start from the descriptor's current value and
-        // change the edited component, so the other components are the ones the inspector is showing.
+        // MaterialProperty only accepts the whole vector. A shared descriptor would copy one target's
+        // unedited components onto the others, so an asset edit merges the changed component into each material.
+        // A callback is one renderer snapshot: merge into that snapshot and let the callback keep it.
         private void SetDissolveComponents(MaterialProperty property, Vector4 value, int components)
         {
-            Vector4 current = property.vectorValue;
-            for (int component = 0; component < 4; component++)
-                if ((components & (1 << component)) != 0) current[component] = value[component];
-            property.vectorValue = current;
+            if (property.applyPropertyCallback != null || property.targets == null || property.targets.Length <= 1)
+            {
+                Vector4 current = property.vectorValue;
+                for (int component = 0; component < 4; component++)
+                    if ((components & (1 << component)) != 0) current[component] = value[component];
+                property.vectorValue = current;
+                return;
+            }
+            Undo.IncrementCurrentGroup();
+            int group = Undo.GetCurrentGroup();
+            Undo.SetCurrentGroupName("Modify " + property.displayName);
+            foreach (Object target in property.targets)
+            {
+                var material = target as Material;
+                if (material == null || !material.HasProperty(property.name)) continue;
+                Vector4 current = material.GetVector(property.name);
+                Vector4 next = current;
+                for (int component = 0; component < 4; component++)
+                    if ((components & (1 << component)) != 0) next[component] = value[component];
+                if (next == current) continue;
+                Undo.RecordObject(material, "Modify " + property.displayName);
+                material.SetVector(property.name, next);
+                FairyToonMaterialSetup.Apply(material);
+            }
+            Undo.CollapseUndoOperations(group);
         }
 
         private void Shadow()
