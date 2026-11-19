@@ -650,7 +650,7 @@ namespace NW.FairyToon.Editor
             bool open = LayoutChoice(key, stored);
             var versionStyle = new GUIStyle(EditorStyles.label) { fontStyle = FontStyle.Bold };
             Rect position = EditorGUILayout.GetControlRect();
-            EditorGUI.LabelField(position, "FairyToon 0.2.1", versionStyle);
+            EditorGUI.LabelField(position, "FairyToon 0.2.2", versionStyle);
             bool nextVersion = EditorGUI.Foldout(position, open, GUIContent.none, true);
             if (nextVersion != stored) EditorPrefs.SetBool(key, nextVersion);
             if (!open) return;
@@ -3416,27 +3416,23 @@ namespace NW.FairyToon.Editor
             Undo.IncrementCurrentGroup();
             int group = Undo.GetCurrentGroup();
             Undo.SetCurrentGroupName("Reset UV");
+            // These UV values do not drive keywords or passes. Avoid resyncing authored blend state on each setter.
+            s_ProbeDepth++;
             try
             {
-                // Use the descriptors supplied by the inspector so animation can own each write independently.
-                var scroll = FindProperty(scrollName, properties, false);
-                if (scroll != null) scroll.vectorValue = Vector4.zero;
-                foreach (string suffix in new[] { "Angle", "_UVMode", "IsDecal", "IsLeftOnly", "IsRightOnly", "ShouldCopy", "ShouldFlipMirror", "ShouldFlipCopy" })
+                // Match the confirmed lilToon 2.4.1 UV4Decal reset, including its button-specific sub-parameter.
+                foreach (string suffix in new[] { "_UVMode", "IsDecal", "IsLeftOnly", "IsRightOnly", "ShouldCopy", "ShouldFlipMirror", "ShouldFlipCopy", "Angle" })
                     SetNumber(FindProperty(tex + suffix, properties, false), 0f);
-
-                var texture = FindProperty(tex, properties, false);
-                if (texture == null || OfferTextureScale(texture, new Vector4(1f, 1f, 0f, 0f), 30)) return;
-                // The first target can already have identity ST while another selected material differs.
-                foreach (Object target in texture.targets)
-                {
-                    if (!(target is Material material) || !material.HasProperty(tex) || Locked(material, tex + "_ST")) continue;
-                    if (material.GetTextureScale(tex).Equals(Vector2.one) && material.GetTextureOffset(tex).Equals(Vector2.zero)) continue;
-                    Undo.RecordObject(material, "Reset UV");
-                    material.SetTextureScale(tex, Vector2.one);
-                    material.SetTextureOffset(tex, Vector2.zero);
-                }
+                var animation = FindProperty(tex + "DecalAnimation", properties, false);
+                if (animation != null) animation.vectorValue = new Vector4(1f, 1f, 1f, 30f);
+                var subParam = FindProperty(tex + "DecalSubParam", properties, false);
+                if (subParam != null) subParam.vectorValue = new Vector4(1f, 1f, 0.01f, 1f);
             }
-            finally { Undo.CollapseUndoOperations(group); }
+            finally
+            {
+                s_ProbeDepth--;
+                Undo.CollapseUndoOperations(group);
+            }
         }
 
         private void AngleSlider(string name)

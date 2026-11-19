@@ -53,6 +53,8 @@ Shader "FairyToon/Gem"
         [ToggleUI] _Main2ndTexShouldCopy ("Copy", Int) = 0
         [ToggleUI] _Main2ndTexShouldFlipMirror ("Flip Mirror", Int) = 0
         [ToggleUI] _Main2ndTexShouldFlipCopy ("Flip Copy", Int) = 0
+        [HideInInspector] _Main2ndTexDecalAnimation ("Decal Animation", Vector) = (1, 1, 1, 30)
+        [HideInInspector] _Main2ndTexDecalSubParam ("Decal Sub-Parameters", Vector) = (1, 1, 0, 1)
         [ToggleUI] _Main2ndTexIsMSDF ("MSDF", Int) = 0
         [NoScaleOffset] _Main2ndBlendMask ("Mask", 2D) = "white" {}
         [Enum(Normal, 0, Add, 1, Screen, 2, Multiply, 3)] _Main2ndTexBlendMode ("Blend Mode", Int) = 0
@@ -81,6 +83,8 @@ Shader "FairyToon/Gem"
         [ToggleUI] _Main3rdTexShouldCopy ("Copy", Int) = 0
         [ToggleUI] _Main3rdTexShouldFlipMirror ("Flip Mirror", Int) = 0
         [ToggleUI] _Main3rdTexShouldFlipCopy ("Flip Copy", Int) = 0
+        [HideInInspector] _Main3rdTexDecalAnimation ("Decal Animation", Vector) = (1, 1, 1, 30)
+        [HideInInspector] _Main3rdTexDecalSubParam ("Decal Sub-Parameters", Vector) = (1, 1, 0, 1)
         [ToggleUI] _Main3rdTexIsMSDF ("MSDF", Int) = 0
         [NoScaleOffset] _Main3rdBlendMask ("Mask", 2D) = "white" {}
         [Enum(Normal, 0, Add, 1, Screen, 2, Multiply, 3)] _Main3rdTexBlendMode ("Blend Mode", Int) = 0

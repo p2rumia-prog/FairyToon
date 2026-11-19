@@ -654,7 +654,7 @@ test('special variants do not exceed common material keyword dimensions except R
     assert.ok(!/#pragma shader_feature[^\n]*\b_FT_REFLECTION\b/.test(gem), 'Gem uses its inherent optical environment reflection');
 });
 test('supported layer names and defaults match installed lilToon', () => {
-    assert.equal(names.length, 80);
+    assert.equal(names.length, 84);
     for (const name of names) {
         assert.ok(reference.has(name), name + ' missing in lilToon');
         assert.equal(current.get(name).value, reference.get(name).value, name + ' default');

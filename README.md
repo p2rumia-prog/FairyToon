@@ -50,7 +50,8 @@ Toon-first URP shaders using lilToon-named properties: FairyToon plus separate R
 - One `_FT_MAIN_LAYERS` keyword covers both main layers in Forward and body coverage passes; Outline has no main-layer variants. `_FT_EMISSION` covers both emissions in Forward and SeeThroughHair. Runtime toggles keep 3rd-only and emission-2nd-only materials independent. Main2nd and Emission 1st use their own texture samplers; Main3rd, Emission 2nd and masks retain `sampler_MainTex`, and gradients reuse `sampler_ft_linear_repeat`. This keeps the optical variants within the DX11 sampler budget.
 - UV1..UV3 use two packed interpolators only in variants that can read extra UVs. Normal Map 2nd / Glitter have UV0 and extra-UV alternatives within their existing feature groups; UV0-only materials with main layers / emission off carry no added context in Forward / SeeThroughHair or DepthNormals. Main layers / emission retain their shared UV1..UV3 interface. Coverage geometry is separate: DepthNormals reuses its normal and handedness, and only clipped main layers require world position. Other body coverage passes need normal / handedness and position for decals / MatCap UVs. Outline and the motion hull carry none. Emission Rim uses absolute shading N.V; main MatCap UVs remain geometric.
 - Both emission masks always use raw UV0 followed by their own scale / offset / scroll / rotation, including zero-speed masks. This matches stock lilToon, which defines `LIL_FEATURE_ANIMATE_EMISSION_MASK_UV`.
-- Skipped: layer distance fade / AudioLink / decal atlas animation and sub-parameters; emission parallax / AudioLink; lilToon's gradient-authoring metadata (`_eg*` / `_e2g*`). Assign the baked gradient texture directly. The converter continues reporting active unsupported sub-options as dropped values.
+- Main Color 2nd/3rd Reset UV clears UV Mode, six Decal flags and Angle. It restores Decal Animation to (1, 1, 1, 30) and Decal Sub-Parameters to (1, 1, 0.01, 1). Tiling, offset and Scroll/Rotate keep their values. The two vectors are stored for material compatibility. Atlas animation playback is unsupported.
+- Skipped: layer distance fade / AudioLink; emission parallax / AudioLink; lilToon's gradient-authoring metadata (`_eg*` / `_e2g*`). Assign the baked gradient texture directly. The converter continues reporting active unsupported sub-options as dropped values.
 - Existing converted materials need `FairyToonMaterialSetup.Apply` (or an inspector edit) to refresh the shared keywords. Name-based conversion copies all supported values and texture transforms; no game or lilToon assembly dependency is added.
 
 Older FairyToon materials can change appearance: emission masks now multiply RGBA (mask alpha previously had no effect), Emission Main Strength uses the layered albedo before Rim Shade (previously after it), and static emission masks use raw UV0 plus their own transform (previously transformed main UV). The single-alpha Add result is preserved apart from these intentional input changes.
@@ -294,6 +295,8 @@ Property mapping (from the shader's actual Properties block; identical names cop
 | Main Color 2nd | `_Main2ndTexShouldCopy` -> `_Main2ndTexShouldCopy` | 1:1 |
 | Main Color 2nd | `_Main2ndTexShouldFlipMirror` -> `_Main2ndTexShouldFlipMirror` | 1:1 |
 | Main Color 2nd | `_Main2ndTexShouldFlipCopy` -> `_Main2ndTexShouldFlipCopy` | 1:1 |
+| Main Color 2nd | `_Main2ndTexDecalAnimation` -> `_Main2ndTexDecalAnimation` | Stored for Reset UV and conversion |
+| Main Color 2nd | `_Main2ndTexDecalSubParam` -> `_Main2ndTexDecalSubParam` | Stored for Reset UV and conversion |
 | Main Color 2nd | `_Main2ndTexIsMSDF` -> `_Main2ndTexIsMSDF` | 1:1 |
 | Main Color 2nd | `_Main2ndBlendMask` -> `_Main2ndBlendMask` | 1:1 |
 | Main Color 2nd | `_Main2ndTexBlendMode` -> `_Main2ndTexBlendMode` | 1:1 |
@@ -312,6 +315,8 @@ Property mapping (from the shader's actual Properties block; identical names cop
 | Main Color 3rd | `_Main3rdTexShouldCopy` -> `_Main3rdTexShouldCopy` | 1:1 |
 | Main Color 3rd | `_Main3rdTexShouldFlipMirror` -> `_Main3rdTexShouldFlipMirror` | 1:1 |
 | Main Color 3rd | `_Main3rdTexShouldFlipCopy` -> `_Main3rdTexShouldFlipCopy` | 1:1 |
+| Main Color 3rd | `_Main3rdTexDecalAnimation` -> `_Main3rdTexDecalAnimation` | Stored for Reset UV and conversion |
+| Main Color 3rd | `_Main3rdTexDecalSubParam` -> `_Main3rdTexDecalSubParam` | Stored for Reset UV and conversion |
 | Main Color 3rd | `_Main3rdTexIsMSDF` -> `_Main3rdTexIsMSDF` | 1:1 |
 | Main Color 3rd | `_Main3rdBlendMask` -> `_Main3rdBlendMask` | 1:1 |
 | Main Color 3rd | `_Main3rdTexBlendMode` -> `_Main3rdTexBlendMode` | 1:1 |
@@ -572,7 +577,7 @@ Not converted:
 
 | lilToon feature | Result |
 |---|---|
-| Main HSVG / gradation, layer distance fade / AudioLink, decal atlas animation | Unsupported non-default sub-options are reported; supported main layers / decals copy by name. |
+| Main HSVG / gradation, layer distance fade / AudioLink, decal atlas animation | Supported main layers and decals copy by name. Decal atlas vectors are retained on the material, and active non-default playback parameters are reported as unsupported. |
 | Emission parallax / AudioLink and gradient-authoring metadata | Both emissions, UV animation, blink and baked gradient textures copy; unsupported sub-options remain reported. |
 | Whole-material / layer dissolve | Modes 1/2/3 copy by name: mask, UV point/line, object-space point/line, scrolling noise and gamma-HDR edge colour. Root coverage remains inactive on Opaque/Gem/Fur shells; layer dissolve supports Opaque, but skips Gem/Fur shells. |
 | Distance fade, AudioLink, parallax / POM, main 1st UV animation | Dropped; distance-fade strength is additionally checked. |

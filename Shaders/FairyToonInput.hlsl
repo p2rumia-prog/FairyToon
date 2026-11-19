@@ -478,6 +478,11 @@ CBUFFER_START(UnityPerMaterial)
     half   _EFOutlineFlatten;
     half4  _EFOutlinePull;
     FT_VARIANT_PROPERTIES
+    // Stored lilToon layer metadata. Atlas playback is not sampled by the shader.
+    float4 _Main2ndTexDecalAnimation;
+    float4 _Main2ndTexDecalSubParam;
+    float4 _Main3rdTexDecalAnimation;
+    float4 _Main3rdTexDecalSubParam;
 CBUFFER_END
 
 // Endfield character globals from FairyToonCharacter: x day strength (1 sun, 0 shade), y top light strength in the
