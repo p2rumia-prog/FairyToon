@@ -1,3 +1,4 @@
+using System.Collections.Generic;
 using UnityEngine;
 using UnityEngine.Rendering;
 
@@ -149,6 +150,16 @@ namespace NW.FairyToon.Editor
             return true;
         }
 
+        private static readonly HashSet<Material> s_ExplicitQueue = new HashSet<Material>();
+
+        // A queue the user just chose must survive the coverage migration in the following Apply.
+        public static bool HoldExplicitQueue(Material material, bool hold)
+        {
+            if (material == null) return false;
+            if (hold) { s_ExplicitQueue.Add(material); return true; }
+            return s_ExplicitQueue.Remove(material);
+        }
+
         public static void Apply(Material material)
         {
             if (material == null || !IsFairyToonShader(material.shader)) return;
@@ -168,7 +179,7 @@ namespace NW.FairyToon.Editor
                 material.SetFloat("_TransparentMode", fur && furMode == FurCutout ? Cutout : Transparent);
             }
             int mode = Mathf.RoundToInt(Get(material, "_TransparentMode"));
-            if (!special && !inheritQueue)
+            if (!special && !inheritQueue && !HoldExplicitQueue(material, false))
             {
                 int queue = material.renderQueue;
                 bool coverageDefault = queue == (int)RenderQueue.Geometry || queue == (int)RenderQueue.AlphaTest;
