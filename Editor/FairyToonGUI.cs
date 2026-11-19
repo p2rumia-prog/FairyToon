@@ -1697,18 +1697,20 @@ namespace NW.FairyToon.Editor
             P("_RimBlendMode", "sBlendMode");
             Separator();
             P("_RimDirStrength", "sLightDirection");
-            bool directed = Float("_RimDirStrength") > 0f || Prop("_RimDirStrength").hasMixedValue;
+            bool directed = !Mathf.Approximately(Float("_RimDirStrength"), 0f) || Prop("_RimDirStrength").hasMixedValue;
             if (directed)
             {
                 EditorGUI.indentLevel++;
                 P("_RimDirRange");
                 InvBorder("_RimBorder");
                 P("_RimBlur", "sBlur");
+                Separator();
                 P("_RimIndirRange");
                 P("_RimIndirColor");
                 InvBorder("_RimIndirBorder");
                 P("_RimIndirBlur");
                 EditorGUI.indentLevel--;
+                Separator();
             }
             else
             {
@@ -2077,8 +2079,8 @@ namespace NW.FairyToon.Editor
                 P("_SrcBlendAlpha");
                 P("_DstBlendAlpha");
             }
-            if (UnityRowVisible("Render Queue")) m_Editor.RenderQueueField();
             if (UnityRowVisible("Enable GPU Instancing")) m_Editor.EnableInstancingField();
+            if (UnityRowVisible("Render Queue")) m_Editor.RenderQueueField();
             if (UnityRowVisible("Double Sided Global Illumination")) m_Editor.DoubleSidedGIField();
 
             EndSection();
