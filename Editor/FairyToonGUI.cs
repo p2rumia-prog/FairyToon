@@ -22,21 +22,16 @@ namespace NW.FairyToon.Editor
 
         // Same layout as lilToon's lilHDRDrawer: a 50px colour field (eyedropper and HDR badge included)
         // and a 50px hex field beside it. An 18px rect is too narrow for the eyedropper.
-        internal static bool Draw(Rect position, string label, ref Color value)
+        internal static bool Draw(Rect position, string label, ref Color value, Rect hexLine = default)
         {
             float xMax = position.xMax;
             bool labeled = !string.IsNullOrEmpty(label);
             float labelWidth = labeled ? EditorGUIUtility.labelWidth : 0f;
             const float gap = 4f;
-            float available = Mathf.Max(0f, position.xMax - position.x - labelWidth);
-            float colorWidth = 50f;
-            float hexWidth = 72f;
-            if (available < colorWidth + gap + hexWidth)
-            {
-                hexWidth = Mathf.Clamp(available - 28f - gap, 48f, 72f);
-                colorWidth = Mathf.Max(18f, available - gap - hexWidth);
-            }
-            position.width = labelWidth + colorWidth;
+            const float swatch = 50f;
+            const float hexWidth = 72f;
+            float room = Mathf.Max(0f, xMax - position.x - labelWidth);
+            position.width = labelWidth + Mathf.Min(swatch, room);
             float intensity = value.maxColorComponent > 1f ? value.maxColorComponent : 1f;
             EditorGUI.BeginChangeCheck();
             Color picked = EditorGUI.ColorField(position, new GUIContent(labeled ? label : string.Empty), value, true, true, true);
@@ -46,9 +41,20 @@ namespace NW.FairyToon.Editor
             string hex = ColorUtility.ToHtmlStringRGB(unit);
             int indent = EditorGUI.indentLevel;
             EditorGUI.indentLevel = 0;
-            var hexRect = position;
-            hexRect.x = Mathf.Min(position.xMax + gap, position.xMax);
-            hexRect.width = Mathf.Max(0f, Mathf.Min(hexWidth, xMax - hexRect.x));
+            Rect hexRect;
+            if (hexLine.width >= 48f)
+            {
+                hexRect = hexLine;
+                hexRect.xMin = hexLine.x + labelWidth;
+                hexRect.width = Mathf.Min(hexWidth, hexLine.xMax - hexRect.xMin);
+            }
+            else
+            {
+                float hexX = position.xMax + gap;
+                hexRect = hexX + hexWidth <= xMax
+                    ? new Rect(hexX, position.y, hexWidth, position.height)
+                    : default;
+            }
             if (hexRect.width >= 48f) hex = EditorGUI.TextField(hexRect, GUIContent.none, hex);
             EditorGUI.indentLevel = indent;
             bool hexChanged = EditorGUI.EndChangeCheck();
@@ -2876,12 +2882,14 @@ namespace NW.FairyToon.Editor
                 if (IsGammaHdr(name) || IsBuiltinHdr(name))
                 {
                     Rect row = EditorGUILayout.GetControlRect();
+                    float valueRoom = row.xMax - row.x - EditorGUIUtility.labelWidth;
+                    Rect hexLine = valueRoom < 50f + 4f + 72f ? EditorGUILayout.GetControlRect() : default;
                     BeginScope(row, prop);
                     try
                     {
                         EditorGUI.showMixedValue = prop.hasMixedValue;
                         Color color = prop.colorValue;
-                        if (FairyToonHDRDrawer.Draw(row, shown, ref color)) prop.colorValue = color;
+                        if (FairyToonHDRDrawer.Draw(row, shown, ref color, hexLine)) prop.colorValue = color;
                     }
                     finally
                     {
@@ -3001,12 +3009,41 @@ namespace NW.FairyToon.Editor
                 P(colorName, label);
                 return;
             }
-            Rect row = m_Editor.TexturePropertySingleLine(new GUIContent(shown), tex);
-            if (color == null) return;
-            Rect bar = row;
-            bar.xMin = Mathf.Min(row.xMax - 18f, row.x + EditorGUIUtility.labelWidth + 68f);
-            bar.xMax = row.xMax;
-            if (bar.width < 8f) bar = new Rect(row.xMax - 18f, row.y, 18f, row.height);
+            Rect row = EditorGUILayout.GetControlRect();
+            const float swatch = 50f;
+            const float gap = 4f;
+            float labelWidth = EditorGUIUtility.labelWidth;
+            bool stacked = row.width < labelWidth + 64f + gap + swatch;
+            Rect texRect = row;
+            texRect.xMin = row.x + labelWidth;
+            Rect bar;
+            if (stacked)
+            {
+                EditorGUI.PrefixLabel(row, new GUIContent(shown));
+                EditorGUI.showMixedValue = tex.hasMixedValue;
+                EditorGUI.BeginChangeCheck();
+                var assigned = (Texture)EditorGUI.ObjectField(texRect, tex.textureValue, typeof(Texture), false);
+                if (EditorGUI.EndChangeCheck()) tex.textureValue = assigned;
+                EditorGUI.showMixedValue = false;
+                if (color == null) return;
+                Rect next = EditorGUILayout.GetControlRect();
+                bar = next;
+                bar.xMin = next.x + labelWidth;
+                bar.width = Mathf.Min(swatch, Mathf.Max(0f, next.xMax - bar.xMin));
+            }
+            else
+            {
+                EditorGUI.PrefixLabel(row, new GUIContent(shown));
+                texRect.xMax = row.xMax - swatch - gap;
+                bar = new Rect(texRect.xMax + gap, row.y, swatch, row.height);
+                EditorGUI.showMixedValue = tex.hasMixedValue;
+                EditorGUI.BeginChangeCheck();
+                var assigned = (Texture)EditorGUI.ObjectField(texRect, tex.textureValue, typeof(Texture), false);
+                if (EditorGUI.EndChangeCheck()) tex.textureValue = assigned;
+                EditorGUI.showMixedValue = false;
+                if (color == null) return;
+            }
+            if (bar.width < 8f) return;
             BeginScope(bar, color);
             EditorGUI.showMixedValue = color.hasMixedValue;
             EditorGUI.BeginChangeCheck();
