@@ -30,8 +30,27 @@ namespace NW.FairyToon.Editor
             const float gap = 4f;
             const float swatch = 50f;
             const float hexWidth = 72f;
-            float room = Mathf.Max(0f, xMax - position.x - labelWidth);
-            position.width = labelWidth + Mathf.Min(swatch, room);
+            Rect hexRect;
+            if (hexLine.width >= swatch + gap + hexWidth)
+            {
+                if (labeled) EditorGUI.LabelField(position, label);
+                float x = hexLine.x;
+                if (labeled) x += labelWidth;
+                if (x + swatch + gap + hexWidth > hexLine.xMax) x = hexLine.x;
+                position = new Rect(x, hexLine.y, swatch, hexLine.height);
+                hexRect = new Rect(position.xMax + gap, hexLine.y, hexWidth, hexLine.height);
+                labeled = false;
+            }
+            else
+            {
+                float room = Mathf.Max(0f, xMax - position.x - labelWidth);
+                float colorWidth = room >= swatch ? swatch : Mathf.Max(0f, room);
+                position.width = labelWidth + colorWidth;
+                float hexX = position.xMax + gap;
+                hexRect = hexX + hexWidth <= xMax
+                    ? new Rect(hexX, position.y, hexWidth, position.height)
+                    : default;
+            }
             float intensity = value.maxColorComponent > 1f ? value.maxColorComponent : 1f;
             EditorGUI.BeginChangeCheck();
             Color picked = EditorGUI.ColorField(position, new GUIContent(labeled ? label : string.Empty), value, true, true, true);
@@ -41,21 +60,7 @@ namespace NW.FairyToon.Editor
             string hex = ColorUtility.ToHtmlStringRGB(unit);
             int indent = EditorGUI.indentLevel;
             EditorGUI.indentLevel = 0;
-            Rect hexRect;
-            if (hexLine.width >= 48f)
-            {
-                hexRect = hexLine;
-                hexRect.xMin = hexLine.x + labelWidth;
-                hexRect.width = Mathf.Min(hexWidth, hexLine.xMax - hexRect.xMin);
-            }
-            else
-            {
-                float hexX = position.xMax + gap;
-                hexRect = hexX + hexWidth <= xMax
-                    ? new Rect(hexX, position.y, hexWidth, position.height)
-                    : default;
-            }
-            if (hexRect.width >= 48f) hex = EditorGUI.TextField(hexRect, GUIContent.none, hex);
+            if (hexRect.width >= hexWidth) hex = EditorGUI.TextField(hexRect, GUIContent.none, hex);
             EditorGUI.indentLevel = indent;
             bool hexChanged = EditorGUI.EndChangeCheck();
             if (hexChanged)
@@ -3120,17 +3125,22 @@ namespace NW.FairyToon.Editor
             // TexturePropertySingleLine ignores custom drawers, so any [FairyToonHDR] colour takes the HDR picker here.
             var content = new GUIContent(shown);
             bool colorExtra = other != null && other.propertyType == ShaderPropertyType.Color;
-            Rect row = m_Editor.TexturePropertySingleLine(content, tex, colorExtra ? null : other);
+            bool hdr = colorExtra && (IsGammaHdr(extra) || IsBuiltinHdr(extra));
+            bool wrap = hdr && NarrowHdrRow();
+            Rect row = m_Editor.TexturePropertySingleLine(content, tex, colorExtra && !hdr ? other : null);
             if (!colorExtra) return true;
-            bool hdr = IsGammaHdr(extra) || IsBuiltinHdr(extra);
-            Rect slot = row;
-            slot.xMin = row.xMax - (hdr ? 126f : 54f);
+            Rect slot = wrap ? EditorGUILayout.GetControlRect() : row;
+            if (!wrap)
+            {
+                slot.xMin = row.xMax - (hdr ? 50f + 4f + 72f : 54f);
+                if (slot.xMin < row.x) slot.xMin = row.x;
+            }
             BeginScope(slot, other);
             EditorGUI.showMixedValue = other.hasMixedValue;
             if (hdr)
             {
                 Color color = other.colorValue;
-                if (FairyToonHDRDrawer.Draw(slot, null, ref color)) other.colorValue = color;
+                if (FairyToonHDRDrawer.Draw(wrap ? row : slot, null, ref color, wrap ? slot : default)) other.colorValue = color;
             }
             else
             {
