@@ -77,6 +77,7 @@ namespace NW.FairyToon.Editor
             Add("sColors", "Color", "色設定", "纹理设置");
             Add("sCopy", "Copy", "コピー", "复制");
             Add("sDissolve", "Dissolve", "Dissolve", "溶解");
+            Add("sDissolveMode", "Dissolve Mode", "Dissolve Mode", "Dissolve Mode");
             Add("sEditorModeAdvanced", "Advanced", "詳細設定", "详细模式");
             Add("sEditorModePreset", "Preset", "プリセット", "材质预设");
             Add("sEditorModeShaderSetting", "Shader Setting", "シェーダー設定", "着色器设置");

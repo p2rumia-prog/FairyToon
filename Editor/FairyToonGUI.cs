@@ -667,8 +667,8 @@ namespace NW.FairyToon.Editor
                 : SearchAllows("_MainTex", "_Color", "_MainTexHSVG", "_MainColorAdjustMask", "|ft.Tiling", "|ft.Offset", "|sReset");
             bool alpha = SearchAllows("_AlphaMaskMode", "_AlphaMask", "_AlphaMaskScale", "_AlphaMaskValue", "_Cutoff", "|sAlphaMaskWarnOpaque", "|ft.AlphaMaskInvert", "|ft.AlphaMaskTransparency", "|ft.AlphaMaskAdvanced")
                 || Phrase("Alpha Mask Scale") || Phrase("Alpha Mask Offset");
-            bool second = PrefixMatches("_Main2nd") || PrefixMatches("_FT_Main2nd") || SearchAllows("_Color2nd", "_UseMain2ndTex", "|UV Line Angle (radians)", "|Position / Direction (XY UV, XYZ Object, W UV Angle)", "|ft.Tiling", "|ft.Offset", "|Decal", "|sMirrorMode", "|sCopyMode", "|sPositionX", "|sPositionY", "|sScaleX", "|sScaleY", "|sScroll", "|sRotate");
-            bool third = PrefixMatches("_Main3rd") || PrefixMatches("_FT_Main3rd") || SearchAllows("_Color3rd", "_UseMain3rdTex", "|UV Line Angle (radians)", "|Position / Direction (XY UV, XYZ Object, W UV Angle)", "|ft.Tiling", "|ft.Offset", "|Decal", "|sMirrorMode", "|sCopyMode", "|sPositionX", "|sPositionY", "|sScaleX", "|sScaleY", "|sScroll", "|sRotate");
+            bool second = PrefixMatches("_Main2nd") || PrefixMatches("_FT_Main2nd") || SearchAllows("_Color2nd", "_UseMain2ndTex", "|UV Line Angle (radians)", "|Position / Direction (XY UV, XYZ Object, W UV Angle)", "|ft.Tiling", "|ft.Offset", "|Decal", "|sMirrorMode", "|sCopyMode", "|sPositionX", "|sPositionY", "|sScaleX", "|sScaleY", "|sScroll", "|sRotate", "|sDissolveMode");
+            bool third = PrefixMatches("_Main3rd") || PrefixMatches("_FT_Main3rd") || SearchAllows("_Color3rd", "_UseMain3rdTex", "|UV Line Angle (radians)", "|Position / Direction (XY UV, XYZ Object, W UV Angle)", "|ft.Tiling", "|ft.Offset", "|Decal", "|sMirrorMode", "|sCopyMode", "|sPositionX", "|sPositionY", "|sScaleX", "|sScaleY", "|sScroll", "|sRotate", "|sDissolveMode");
             if (Searching && !first && !alpha && !second && !third) return;
             if (!BeginSection("Main", "sMainColorSetting", null, true, PropertyBlock.MainColor, true, false)) return;
             if (first) MainColorFirst();
@@ -686,21 +686,27 @@ namespace NW.FairyToon.Editor
             ScaleOffset("_MainTex");
             if (!EverySelectedIsGem())
             {
+                Separator();
                 string adjustKey = PrefsPrefix + "Foldout.MainAdjust";
                 bool adjust = EditorGUILayout.Foldout(EditorPrefs.GetBool(adjustKey, false), FairyToonL10n.Text("sColorAdjust"), true);
                 if (adjust != EditorPrefs.GetBool(adjustKey, false)) EditorPrefs.SetBool(adjustKey, adjust);
                 if (adjust || Searching)
                 {
-                    // lilToon draws the mask, then HSV / Gamma with its own reset. Default is (0, 1, 1, 1).
+                    // lilToon draws the mask, then a bold indented HSV / Gamma with its own reset.
                     Tex("_MainColorAdjustMask", null, "Color Adjustment Mask");
-                    if (!Searching || RowVisible("_MainTexHSVG", "Hue / Saturation / Value / Gamma"))
+                    if (!Searching || RowVisible("_MainTexHSVG", "Hue / Saturation / Value / Gamma") || Hit("HSV / Gamma"))
                     {
-                        EditorGUILayout.LabelField("HSV / Gamma");
+                        EditorGUI.indentLevel++;
+                        EditorGUILayout.LabelField("HSV / Gamma", EditorStyles.boldLabel);
+                        EditorGUI.indentLevel++;
                         HsvgSliders("_MainTexHSVG");
+                        var hsvg = Prop("_MainTexHSVG");
+                        if (hsvg != null && (!Searching || LabelOnly("sReset")) && GUILayout.Button(FairyToonL10n.Text("sReset")))
+                            hsvg.vectorValue = new Vector4(0f, 1f, 1f, 1f);
+                        EditorGUI.indentLevel--;
+                        Separator();
+                        EditorGUI.indentLevel--;
                     }
-                    var hsvg = Prop("_MainTexHSVG");
-                    if (hsvg != null && (!Searching || LabelOnly("sReset")) && GUILayout.Button(FairyToonL10n.Text("sReset")))
-                        hsvg.vectorValue = new Vector4(0f, 1f, 1f, 1f);
                 }
             }
             EndGearRow();
@@ -803,18 +809,22 @@ namespace NW.FairyToon.Editor
             var block = layer == "2nd" ? PropertyBlock.MainColor2nd : PropertyBlock.MainColor3rd;
             if (!BeginSection("Main" + layer, titleKey, Prop("_UseMain" + layer + "Tex"), false, block, false)) return;
             Tex(prefix + "Tex", "_Color" + layer, "sColor");
+            EditorGUI.indentLevel += 2;
             ColorAlpha("_Color" + layer);
             P(prefix + "TexIsMSDF", "sMSDFTexture");
             P(prefix + "Tex_Cull", "sCullMode");
+            EditorGUI.indentLevel -= 2;
             P(prefix + "EnableLighting", "sEnableLighting");
             P(prefix + "TexBlendMode", "sBlendMode");
             P(prefix + "TexAlphaMode", "sTransparentMode");
+            Separator();
             P(prefix + "Tex_UVMode", "UV Mode");
             DrawDecal(prefix);
             var decal = Prop(prefix + "TexIsDecal");
             if (decal == null || decal.hasMixedValue || Number(decal) <= 0.5f) ScaleOffset(prefix + "Tex");
-            P(prefix + "TexAngle", "sAngle");
+            AngleSlider(prefix + "TexAngle");
             ScrollAndRotate(prefix + "Tex_ScrollRotate");
+            Separator();
             Tex(prefix + "BlendMask", null, "sMask");
             if (!EverySelectedIsGem()) DissolveControls(prefix + "Dissolve", false);
             EndSection();
@@ -918,7 +928,7 @@ namespace NW.FairyToon.Editor
         // Root dissolve is an advanced section after Outline and before Refraction/Fur, as in lilToon.
         private void Dissolve()
         {
-            if (!PrefixMatches("_Dissolve") && !PrefixMatches("_FT_Dissolve") && !SearchAllows("|Mode", "|Shape", "|Threshold", "|Edge Width", "|Edge Color", "|Position", "|Direction", "|UV Line Angle (radians)", "|ft.DissolveOff", "|ft.DissolveMask", "|ft.DissolveUV", "|ft.DissolveObject", "|ft.DissolveRadial", "|ft.DissolveLinear")) return;
+            if (!PrefixMatches("_Dissolve") && !PrefixMatches("_FT_Dissolve") && !SearchAllows("|Mode", "|Shape", "|Threshold", "|Edge Width", "|Edge Color", "|Position", "|Direction", "|UV Line Angle (radians)", "|ft.DissolveOff", "|ft.DissolveMask", "|ft.DissolveUV", "|ft.DissolveObject", "|ft.DissolveRadial", "|ft.DissolveLinear", "|sDissolveMode")) return;
             if (!BeginSection("Dissolve", "sDissolve", null, false, PropertyBlock.Dissolve)) return;
             DissolveControls("_Dissolve", true);
             EndSection();
@@ -927,11 +937,11 @@ namespace NW.FairyToon.Editor
         private void DissolveControls(string prefix, bool wholeMaterial)
         {
             if (Prop(prefix + "Params") == null) return;
-            if (!wholeMaterial) SubHeader("Dissolve");
+            if (!wholeMaterial) Separator();
             if (SelectedRenderingMode(FairyToonMaterialSetup.Fur))
             Help("Dissolve affects the Fur body only; Fur ribbon shells ignore whole-material and layer dissolve.", MessageType.Info);
 
-            DissolveParameter(prefix + "Params", 0, "Mode", new[] { "ft.DissolveOff", "ft.DissolveMask", "ft.DissolveUV", "ft.DissolveObject" });
+            DissolveParameter(prefix + "Params", 0, "sDissolveMode", new[] { "ft.DissolveOff", "ft.DissolveMask", "ft.DissolveUV", "ft.DissolveObject" });
             var parameters = Prop(prefix + "Params");
             int mode = Mathf.RoundToInt(parameters.vectorValue.x);
             bool mixedMode = DissolveComponentMixed(parameters, 0);
@@ -2356,6 +2366,23 @@ namespace NW.FairyToon.Editor
             if ((!Searching || LabelOnly("sReset")) && GUILayout.Button(FairyToonL10n.Text("sReset")))
                 SetDissolveComponents(property, Vector4.zero, 15);
         }
+
+        private void AngleSlider(string name)
+        {
+            var property = Prop(name);
+            if (property == null || !RowVisible(name, "sAngle")) return;
+            Rect row = EditorGUILayout.GetControlRect();
+            BeginScope(row, property);
+            EditorGUI.showMixedValue = property.hasMixedValue;
+            EditorGUI.BeginChangeCheck();
+            float degrees = RoundMillion(Number(property) / Mathf.PI * 180f);
+            degrees = EditorGUI.Slider(row, Event.current.alt ? name : FairyToonL10n.Text("sAngle"), degrees, -180f, 180f);
+            if (EditorGUI.EndChangeCheck()) SetNumber(property, degrees * Mathf.PI / 180f);
+            EditorGUI.showMixedValue = false;
+            EndScope();
+        }
+
+        private static float RoundMillion(float value) => Mathf.Floor(value * 1000000f + 0.5f) * 0.000001f;
 
         private void InvBorder(string name)
         {
