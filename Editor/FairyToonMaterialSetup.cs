@@ -1,4 +1,3 @@
-using System.Collections.Generic;
 using UnityEngine;
 using UnityEngine.Rendering;
 
@@ -150,8 +149,6 @@ namespace NW.FairyToon.Editor
             return true;
         }
 
-        private static readonly Dictionary<Material, int> s_CoverageMode = new Dictionary<Material, int>();
-
         public static void Apply(Material material)
         {
             if (material == null || !IsFairyToonShader(material.shader)) return;
@@ -171,23 +168,11 @@ namespace NW.FairyToon.Editor
                 material.SetFloat("_TransparentMode", fur && furMode == FurCutout ? Cutout : Transparent);
             }
             int mode = Mathf.RoundToInt(Get(material, "_TransparentMode"));
-            // The first observation records the mode. Later Applies migrate only when coverage itself changes,
-            // so an explicit Geometry 2000 on a Transparent material is not rewritten, and the mark cannot leak.
-            bool modeChanged = s_CoverageMode.TryGetValue(material, out int seenMode) && seenMode != mode;
-            s_CoverageMode[material] = mode;
-            if (!special && !inheritQueue && modeChanged)
-            {
-                int queue = material.renderQueue;
-                bool coverageDefault = queue == (int)RenderQueue.Geometry || queue == (int)RenderQueue.AlphaTest;
-                if (mode == Transparent)
-                {
-                    // Authored low queues (including lilToon's Transparent 2460) retain their order.
-                    if (queue <= (int)RenderQueue.GeometryLast && (coverageDefault || managedHairQueue))
-                        material.renderQueue = (int)RenderQueue.Transparent;
-                }
-                else if (queue > (int)RenderQueue.GeometryLast)
-                    material.renderQueue = mode == Cutout ? (int)RenderQueue.AlphaTest : (int)RenderQueue.Geometry;
-            }
+            // Explicit queues, including a custom Geometry value on a Transparent material, stay put.
+            // Only the managed see-through hair queue moves when coverage becomes Transparent.
+            // Mode switches set their own queue in SetRenderingMode before this runs.
+            if (!special && !inheritQueue && managedHairQueue && mode == Transparent)
+                material.renderQueue = (int)RenderQueue.Transparent;
             SetKeyword(material, "_ALPHATEST_ON", mode == Cutout);
             SetKeyword(material, "_SURFACE_TYPE_TRANSPARENT", mode == Transparent);
             if (mode == Transparent)
@@ -236,8 +221,6 @@ namespace NW.FairyToon.Editor
                 material.SetInt("_FurDstBlend", furMode == FurTransparent ? (int)BlendMode.OneMinusSrcAlpha : (int)BlendMode.Zero);
                 material.SetInt("_FurSrcBlendAlpha", (int)BlendMode.One);
                 material.SetInt("_FurDstBlendAlpha", (int)BlendMode.OneMinusSrcAlpha);
-                material.SetInt("_FurZWrite", furMode == FurTransparent ? 0 : 1);
-                material.SetInt("_FurAlphaToMask", furMode != FurTransparent ? 1 : 0);
             }
             // (transparent surfaces stay out of the depth prepass, SSAO normals and object motion)
             bool depthPasses = fur || mode != Transparent;
