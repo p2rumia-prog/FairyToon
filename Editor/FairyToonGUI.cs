@@ -2156,14 +2156,48 @@ namespace NW.FairyToon.Editor
         {
             var tex = Prop(texture);
             if (tex == null || (tex.propertyFlags & UnityEngine.Rendering.ShaderPropertyFlags.NoScaleOffset) != 0) return;
-            if (!RowVisible(texture, null) && !RowVisible(null, "ft.Tiling") && !RowVisible(null, "ft.Offset")) return;
-            EditorGUI.showMixedValue = tex.hasMixedValue;
+            bool named = !Searching || Hit(texture) || Hit(tex.displayName) || Hit(FairyToonL10n.Property(texture, tex.displayName));
+            bool showTiling = named || LabelOnly("ft.Tiling");
+            bool showOffset = named || LabelOnly("ft.Offset");
+            if (!showTiling && !showOffset) return;
             Vector4 st = tex.textureScaleAndOffset;
+            if (showTiling) DrawTextureAxes(tex, st, true);
+            if (showOffset) DrawTextureAxes(tex, st, false);
+        }
+
+        // Native TextureScaleOffsetProperty scopes the row with BeginProperty and BeginAnimatedCheck, and its mixed
+        // mask is the scale/offset bits, not the texture reference. Each label gets that scope. Mixed state is read
+        // from the materials so a different texture does not mark both rows mixed.
+        private void DrawTextureAxes(MaterialProperty tex, Vector4 st, bool scaleRow)
+        {
+            Rect row = EditorGUILayout.GetControlRect();
+            BeginScope(row, tex);
+            EditorGUI.showMixedValue = TextureAxesDiffer(tex, scaleRow);
             EditorGUI.BeginChangeCheck();
-            Vector2 scale = EditorGUILayout.Vector2Field(FairyToonL10n.Text("ft.Tiling"), new Vector2(st.x, st.y));
-            Vector2 offset = EditorGUILayout.Vector2Field(FairyToonL10n.Text("ft.Offset"), new Vector2(st.z, st.w));
-            if (EditorGUI.EndChangeCheck()) tex.textureScaleAndOffset = new Vector4(scale.x, scale.y, offset.x, offset.y);
+            Vector2 edited = EditorGUI.Vector2Field(row, new GUIContent(FairyToonL10n.Text(scaleRow ? "ft.Tiling" : "ft.Offset")),
+                scaleRow ? new Vector2(st.x, st.y) : new Vector2(st.z, st.w));
+            if (EditorGUI.EndChangeCheck())
+            {
+                Vector4 next = tex.textureScaleAndOffset;
+                if (scaleRow) { next.x = edited.x; next.y = edited.y; }
+                else { next.z = edited.x; next.w = edited.y; }
+                tex.textureScaleAndOffset = next;
+            }
             EditorGUI.showMixedValue = false;
+            EndScope();
+        }
+
+        private static bool TextureAxesDiffer(MaterialProperty tex, bool scale)
+        {
+            if (tex.targets == null || tex.targets.Length < 2 || !(tex.targets[0] is Material first)) return false;
+            Vector2 baseline = scale ? first.GetTextureScale(tex.name) : first.GetTextureOffset(tex.name);
+            for (int i = 1; i < tex.targets.Length; i++)
+            {
+                if (!(tex.targets[i] is Material material)) continue;
+                Vector2 value = scale ? material.GetTextureScale(tex.name) : material.GetTextureOffset(tex.name);
+                if (value != baseline) return true;
+            }
+            return false;
         }
 
         private static void InitStyles()
