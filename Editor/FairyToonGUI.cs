@@ -645,7 +645,6 @@ namespace NW.FairyToon.Editor
                 P("_Cutoff");
             P("_FlipNormal");
             P("_BackfaceColor");
-            ColorAlpha("_BackfaceColor");
             P("_AAStrength");
             EndSection();
         }
