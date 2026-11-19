@@ -126,7 +126,7 @@ namespace NW.FairyToon.Editor
                     if (ChangesValue(dest, source)) ApplyValue(dest, source);
                     if (!entry.IsTexture || !shouldCopyTex) continue;
                     string st = entry.Name + "_ST";
-                    if (!CopiedVectorProperties.TryGetValue(st, out Vector4 scale) || !material.HasProperty(st) || material.GetVector(st) == scale)
+                    if (!CopiedVectorProperties.TryGetValue(st, out Vector4 scale) || !material.HasProperty(st) || SameVector(material.GetVector(st), scale))
                         continue;
                     material.SetVector(st, scale);
                     FairyToonGUI.NoteDirectWrite(material);
@@ -211,11 +211,13 @@ namespace NW.FairyToon.Editor
                 }
                 if (!shouldCopyTex || !entry.IsTexture) continue;
                 string st = entry.Name + "_ST";
-                if (CopiedVectorProperties.TryGetValue(st, out Vector4 scale) && material.HasProperty(st) && material.GetVector(st) != scale)
+                if (CopiedVectorProperties.TryGetValue(st, out Vector4 scale) && material.HasProperty(st) && !SameVector(material.GetVector(st), scale))
                     change = true;
             }
             return change;
         }
+
+        private static bool SameVector(Vector4 a, Vector4 b) => a.x == b.x && a.y == b.y && a.z == b.z && a.w == b.w;
 
         private static bool ResetWouldChange(PropertyBlock block, MaterialProperty[] props, out bool callback)
         {
