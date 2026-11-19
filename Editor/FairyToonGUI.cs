@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using UnityEditor;
 using UnityEngine;
 using Object = UnityEngine.Object;
@@ -34,6 +35,8 @@ namespace NW.FairyToon.Editor
         private static GUIStyle s_Foldout;
         private static GUIStyle s_Gear;
         private static bool s_ProSkin;
+        private static string s_Search = "";
+        private readonly List<bool> m_SearchRelax = new List<bool>();
 
         private MaterialEditor m_Editor;
         private MaterialProperty[] m_Props;
@@ -51,6 +54,7 @@ namespace NW.FairyToon.Editor
             m_Editor = materialEditor;
             m_Props = properties;
             InitStyles();
+            m_SearchRelax.Clear();
             FairyToonL10n.DrawLanguagePopup();
             FairyToonL10n.DrawModeToolbar();
             EditorGUILayout.Space(2f);
@@ -79,37 +83,38 @@ namespace NW.FairyToon.Editor
         //   Advanced: Outline, Dissolve, Refraction, Fur, See-through Hair, Stencil, Rendering
         private void DrawAdvanced()
         {
+            s_Search = EditorGUILayout.TextField(s_Search, EditorStyles.toolbarSearchField);
             EditorGUI.BeginChangeCheck();
             BaseSetting();
             Lighting();
-            Group("sColors");
+            Group("sColors", PropertyBlock.MainColor, PropertyBlock.Shadow, PropertyBlock.RimShade, PropertyBlock.Emission, PropertyBlock.Sheer, PropertyBlock.Iris, PropertyBlock.EndfieldSurface);
             MainColor();
-            MainColorLayer("2nd");
-            MainColorLayer("3rd");
-            SheerFabric();
+            if (Prop("_SheerAmount") != null) SheerFabric();
             var shading = Prop("_ShadingModel");
+            bool mixedShading = shading != null && shading.hasMixedValue;
             bool endfield = shading != null && !shading.hasMixedValue
-            && Mathf.RoundToInt(shading.floatValue) == FairyToonMaterialSetup.ShadingEndfield;
-            if (!endfield) ToonIris();
-            if (endfield) Endfield();
-            else Shadow();
+                && Mathf.RoundToInt(shading.floatValue) == FairyToonMaterialSetup.ShadingEndfield;
+            bool showToon = mixedShading || !endfield;
+            bool showEndfield = mixedShading || endfield;
+            if (showToon) ToonIris();
+            if (showEndfield) Endfield();
+            if (showToon) Shadow();
             RimShade();
-            Emission(false);
-            Emission(true);
-            Group("sNormalMapReflection");
-            NormalMaps();
+            EmissionGroup();
+            Group("sNormalMapReflection", PropertyBlock.NormalMap, PropertyBlock.Anisotropy, PropertyBlock.Backlight, PropertyBlock.Reflection, PropertyBlock.Wetness, PropertyBlock.MatCaps, PropertyBlock.RimLight, PropertyBlock.Glitter, PropertyBlock.Gem);
+            NormalGroup();
             Anisotropy();
             Backlight();
             Reflection();
-            Wetness(endfield);
-            MatCap();
+            Wetness(endfield && !mixedShading);
+            MatCapGroup();
             RimLight();
             Glitter();
             if (SelectedRenderingMode(FairyToonMaterialSetup.Gem)) Gem();
-            Group("sAdvanced");
+            Group("sAdvanced", PropertyBlock.Outline, PropertyBlock.Dissolve, PropertyBlock.Refraction, PropertyBlock.Fur, PropertyBlock.SeeThrough, PropertyBlock.Stencil, PropertyBlock.Rendering);
             if (!SelectedRenderingMode(FairyToonMaterialSetup.Fur) && !SelectedRenderingMode(FairyToonMaterialSetup.Gem))
-            Outline();
-            Dissolve();
+                Outline();
+            if (AnyRunsWholeDissolve()) Dissolve();
             if (SelectedRenderingMode(FairyToonMaterialSetup.Refraction)) Refraction();
             if (SelectedRenderingMode(FairyToonMaterialSetup.Fur)) Fur();
             if (!SelectedSpecialMode()) SeeThrough();
@@ -119,18 +124,96 @@ namespace NW.FairyToon.Editor
             foreach (Object target in m_Editor.targets) FairyToonMaterialSetup.Apply(target as Material);
         }
 
-        private static void Group(string key)
+        private void Group(string key, params PropertyBlock[] blocks)
         {
+            string shown = FairyToonL10n.Text(key);
+            if (Searching && !Relaxed && !Hit(shown))
+            {
+                bool any = false;
+                for (int i = 0; i < blocks.Length; i++) any |= BlockHit(blocks[i]);
+                if (!any) return;
+            }
             EditorGUILayout.Space();
-            GUILayout.Label(FairyToonL10n.Text(key), EditorStyles.boldLabel);
+            GUILayout.Label(shown, EditorStyles.boldLabel);
         }
 
-        private static void DrawPresetPage()
+        private void EmissionGroup()
+        {
+            if (!BeginSection("EmissionGroup", "sEmissionSetting", null, false, PropertyBlock.Emission)) return;
+            Emission(false);
+            Emission(true);
+            EndSection();
+        }
+
+        private void NormalGroup()
+        {
+            if (!BeginSection("NormalGroup", "sNormalMapSetting", null, false, PropertyBlock.NormalMap)) return;
+            NormalMaps();
+            EndSection();
+        }
+
+        private void MatCapGroup()
+        {
+            if (!BeginSection("MatCapGroup", "sMatCapSetting", null, false, PropertyBlock.MatCaps)) return;
+            MatCap();
+            EndSection();
+        }
+
+        private bool AnyRunsWholeDissolve()
+        {
+            bool any = false;
+            foreach (Object target in m_Editor.targets)
+            {
+                int mode = FairyToonMaterialSetup.GetRenderingMode(target as Material);
+                if (mode != FairyToonMaterialSetup.Opaque && mode != FairyToonMaterialSetup.Gem) any = true;
+            }
+            return any;
+        }
+
+        private bool EverySelectedIsGem()
+        {
+            bool any = false;
+            foreach (Object target in m_Editor.targets)
+            {
+                any = true;
+                if (FairyToonMaterialSetup.GetRenderingMode(target as Material) != FairyToonMaterialSetup.Gem) return false;
+            }
+            return any;
+        }
+
+        private static bool Searching => !string.IsNullOrEmpty(s_Search);
+
+        private bool Relaxed => m_SearchRelax.Count > 0 && m_SearchRelax[m_SearchRelax.Count - 1];
+
+        private static bool Hit(string text) => !string.IsNullOrEmpty(text) && text.IndexOf(s_Search, StringComparison.Ordinal) >= 0;
+
+        private bool BlockHit(PropertyBlock block)
+        {
+            for (int i = 0; i < FairyToonPropertyBlocks.All.Length; i++)
+            {
+                FairyToonPropertyEntry entry = FairyToonPropertyBlocks.All[i];
+                bool member = false;
+                for (int b = 0; b < entry.Blocks.Length; b++) if (entry.Blocks[b] == block) member = true;
+                if (!member || Prop(entry.Name) == null) continue;
+                if (Hit(entry.Name) || Hit(FairyToonL10n.Property(entry.Name, entry.Name))) return true;
+            }
+            return false;
+        }
+
+        private bool RowVisible(string name, string shown)
+        {
+            if (!Searching || Relaxed) return true;
+            if (Hit(name) || Hit(shown)) return true;
+            var prop = Prop(name);
+            return prop != null && Hit(prop.displayName);
+        }
+
+        private void DrawPresetPage()
         {
             Help(FairyToonL10n.Text("ft.presetPlaceholder"), MessageType.Info);
         }
 
-        private static void DrawShaderSettingPage()
+        private void DrawShaderSettingPage()
         {
             Help(FairyToonL10n.Text("ft.shaderSettingIntro"), MessageType.Info);
             EditorGUILayout.LabelField(FairyToonL10n.Text("ft.languageLivesInTopBar"), EditorStyles.wordWrappedLabel);
@@ -143,7 +226,7 @@ namespace NW.FairyToon.Editor
 
         private void BaseSetting()
         {
-            if (!BeginSection("Base", "sBaseSetting", null, true, FairyToonBlock.Base)) return;
+            if (!BeginSection("Base", "sBaseSetting", null, true, PropertyBlock.Base)) return;
             P("_ShadingModel", "Shading Model");
             RenderingMode();
             var mode = Prop("_TransparentMode");
@@ -171,7 +254,7 @@ namespace NW.FairyToon.Editor
 
         private void Lighting()
         {
-            if (!BeginSection("Lighting", "sLightingSettings", null, false, FairyToonBlock.Lighting)) return;
+            if (!BeginSection("Lighting", "sLightingSettings", null, false, PropertyBlock.Lighting)) return;
             P("_LightMinLimit", "sLightMinLimit");
             P("_LightMaxLimit", "sLightMaxLimit");
             P("_MonochromeLighting", "sMonochromeLighting");
@@ -181,7 +264,7 @@ namespace NW.FairyToon.Editor
 
         private void MainColor()
         {
-            if (!BeginSection("Main", "sMainColorSetting", null, true, FairyToonBlock.Main)) return;
+            if (!BeginSection("Main", "sMainColorSetting", null, true, PropertyBlock.MainColor)) return;
             Tex("_MainTex", "_Color", "sColor");
             ScaleOffset("_MainTex");
             P("_MainTexHSVG", "Hue / Saturation / Value / Gamma");
@@ -195,7 +278,8 @@ namespace NW.FairyToon.Editor
                 P("_AlphaMaskScale", "Scale");
                 P("_AlphaMaskValue", "Offset");
             }
-
+            MainColorLayer("2nd");
+            MainColorLayer("3rd");
             EndSection();
         }
 
@@ -203,7 +287,7 @@ namespace NW.FairyToon.Editor
         {
             string prefix = "_Main" + layer;
             string titleKey = layer == "2nd" ? "sMainColor2nd" : "sMainColor3rd";
-            var block = layer == "2nd" ? FairyToonBlock.Main2nd : FairyToonBlock.Main3rd;
+            var block = layer == "2nd" ? PropertyBlock.MainColor2nd : PropertyBlock.MainColor3rd;
             if (!BeginSection("Main" + layer, titleKey, Prop("_UseMain" + layer + "Tex"), false, block)) return;
             Tex(prefix + "Tex", "_Color" + layer, "Texture");
             Tex(prefix + "BlendMask", null, "Mask");
@@ -223,15 +307,14 @@ namespace NW.FairyToon.Editor
             P(prefix + "TexShouldFlipMirror", "Flip Mirror");
             P(prefix + "TexShouldFlipCopy", "Flip Copy");
             P(prefix + "TexIsMSDF", "MSDF");
-            DissolveControls(prefix + "Dissolve", false);
-
+            if (!EverySelectedIsGem()) DissolveControls(prefix + "Dissolve", false);
             EndSection();
         }
 
         // Root dissolve is an advanced section after Outline and before Refraction/Fur, as in lilToon.
         private void Dissolve()
         {
-            if (!BeginSection("Dissolve", "sDissolve", null, false, FairyToonBlock.Dissolve)) return;
+            if (!BeginSection("Dissolve", "sDissolve", null, false, PropertyBlock.Dissolve)) return;
             DissolveControls("_Dissolve", true);
             EndSection();
         }
@@ -240,10 +323,6 @@ namespace NW.FairyToon.Editor
         {
             if (Prop(prefix + "Params") == null) return;
             if (!wholeMaterial) SubHeader("Dissolve");
-            if (wholeMaterial && (SelectedRenderingMode(FairyToonMaterialSetup.Opaque) || SelectedRenderingMode(FairyToonMaterialSetup.Gem)))
-            Help("Dissolve is ignored on Opaque and Gem materials. This applies to all whole-material dissolve modes.", MessageType.Info);
-            if (!wholeMaterial && SelectedRenderingMode(FairyToonMaterialSetup.Gem))
-            Help("Layer dissolve is ignored on Gem materials. Opaque materials support layer dissolve.", MessageType.Info);
             if (SelectedRenderingMode(FairyToonMaterialSetup.Fur))
             Help("Dissolve affects the Fur body only; Fur ribbon shells ignore whole-material and layer dissolve.", MessageType.Info);
 
@@ -302,6 +381,7 @@ namespace NW.FairyToon.Editor
         {
             var property = Prop(name);
             if (property == null) return;
+            if (!RowVisible(name, FairyToonL10n.Text(label))) return;
             Vector4 value = property.vectorValue;
             bool previousMixed = EditorGUI.showMixedValue;
             EditorGUI.showMixedValue = DissolveComponentMixed(property, component);
@@ -380,7 +460,7 @@ namespace NW.FairyToon.Editor
 
         private void Shadow()
         {
-            if (!BeginSection("Shadow", "sShadowSetting", Prop("_UseShadow"), true, FairyToonBlock.Shadow)) return;
+            if (!BeginSection("Shadow", "sShadowSetting", Prop("_UseShadow"), true, PropertyBlock.Shadow)) return;
             var maskType = Prop("_ShadowMaskType");
             P("_ShadowMaskType");
             int type = maskType.hasMixedValue ? -1 : Mathf.RoundToInt(maskType.floatValue);
@@ -462,7 +542,7 @@ namespace NW.FairyToon.Editor
             string prefix = second ? "_Emission2nd" : "_Emission";
             string prefs = second ? "Emission 2nd" : "Emission";
             string title = second ? "sEmission2nd" : "sEmissionSetting";
-            var block = second ? FairyToonBlock.Emission2nd : FairyToonBlock.Emission;
+            var block = second ? PropertyBlock.Emission2nd : PropertyBlock.Emission1st;
             if (!BeginSection(prefs, title, Prop(second ? "_UseEmission2nd" : "_UseEmission"), false, block)) return;
             Tex(prefix + "Map", prefix + "Color", "Color");
             P(prefix + "Blend", "Blend");
@@ -489,7 +569,7 @@ namespace NW.FairyToon.Editor
         private void Endfield()
         {
             int part = Mathf.RoundToInt(Float("_EFPart"));
-            if (BeginSection("EFSurface", "ft.EFSurface", null, true, FairyToonBlock.EndfieldSurface))
+            if (BeginSection("EFSurface", "ft.EFSurface", null, true, PropertyBlock.EndfieldSurface))
             {
                 P("_EFPart");
                 part = Mathf.RoundToInt(Float("_EFPart"));
@@ -541,7 +621,7 @@ namespace NW.FairyToon.Editor
                 EndSection();
             }
 
-            if (BeginSection("EFDiffuse", "ft.EFDiffuse", null, true, FairyToonBlock.EndfieldDiffuse))
+            if (BeginSection("EFDiffuse", "ft.EFDiffuse", null, true, PropertyBlock.EndfieldDiffuse))
             {
                 var ramp = Prop("_DiffuseRamp");
                 Tex("_DiffuseRamp", null, "Ramp (RGB hue, A lit weight)");
@@ -568,7 +648,7 @@ namespace NW.FairyToon.Editor
                 EndSection();
             }
 
-            if (part == FairyToonMaterialSetup.PartHair && BeginSection("EFHair", "ft.EFHair", null, true, FairyToonBlock.EndfieldHair))
+            if (part == FairyToonMaterialSetup.PartHair && BeginSection("EFHair", "ft.EFHair", null, true, PropertyBlock.EndfieldHair))
             {
                 Tex("_HairMask", null, "Hair Mask (R highlight, G strand noise, B AO)");
                 Tex("_SpecRamp", null, "Band Colour Ramp (U band strength, V side)");
@@ -612,7 +692,7 @@ namespace NW.FairyToon.Editor
                 EndSection();
             }
 
-            if (part != FairyToonMaterialSetup.PartHair && BeginSection("EFSpecular", "ft.EFSpecular", null, true, FairyToonBlock.EndfieldSpecular))
+            if (part != FairyToonMaterialSetup.PartHair && BeginSection("EFSpecular", "ft.EFSpecular", null, true, PropertyBlock.EndfieldSpecular))
             {
                 P("_EFSpecular");
                 Tex("_SpecRamp", null, "Specular Ramp");
@@ -625,7 +705,7 @@ namespace NW.FairyToon.Editor
                 EndSection();
             }
 
-            if (BeginSection("EFRim", "ft.EFRim", null, false, FairyToonBlock.EndfieldRim))
+            if (BeginSection("EFRim", "ft.EFRim", null, false, PropertyBlock.EndfieldRim))
             {
                 P("_EFRimColor");
                 P("_EFRimStrength");
@@ -645,7 +725,7 @@ namespace NW.FairyToon.Editor
 
         private void NormalMaps()
         {
-            if (BeginSection("Normal", "sNormalMapSetting", Prop("_UseBumpMap"), false, FairyToonBlock.Normal))
+            if (BeginSection("Normal", "sNormalMapSetting", Prop("_UseBumpMap"), false, PropertyBlock.NormalMap1st))
             {
                 Tex("_BumpMap", "_BumpScale", "Normal Map");
                 ScaleOffset("_BumpMap");
@@ -654,7 +734,7 @@ namespace NW.FairyToon.Editor
                 EndSection();
             }
 
-            if (!BeginSection("Normal2nd", "sNormalMap2nd", Prop("_UseBump2ndMap"), false, FairyToonBlock.Normal2nd)) return;
+            if (!BeginSection("Normal2nd", "sNormalMap2nd", Prop("_UseBump2ndMap"), false, PropertyBlock.NormalMap2nd)) return;
             Tex("_Bump2ndMap", "_Bump2ndScale", "Normal Map");
             P("_Bump2ndMap_UVMode");
             Tex("_Bump2ndScaleMask", null, "Scale Mask");
@@ -668,7 +748,7 @@ namespace NW.FairyToon.Editor
 
         private void Anisotropy()
         {
-            if (!BeginSection("Anisotropy", "sAnisotropy", Prop("_UseAnisotropy"), false, FairyToonBlock.Anisotropy)) return;
+            if (!BeginSection("Anisotropy", "sAnisotropy", Prop("_UseAnisotropy"), false, PropertyBlock.Anisotropy)) return;
             Tex("_AnisotropyTangentMap", "_AnisotropyScale", "Tangent Map");
             Tex("_AnisotropyScaleMask", null, "Scale Mask");
             ScaleOffset("_AnisotropyTangentMap");
@@ -696,7 +776,7 @@ namespace NW.FairyToon.Editor
 
         private void Backlight()
         {
-            if (!BeginSection("Backlight", "sBacklightSetting", Prop("_UseBacklight"), false, FairyToonBlock.Backlight)) return;
+            if (!BeginSection("Backlight", "sBacklightSetting", Prop("_UseBacklight"), false, PropertyBlock.Backlight)) return;
             Tex("_BacklightColorTex", "_BacklightColor", "Color");
             ScaleOffset("_BacklightColorTex");
             P("_BacklightBorder");
@@ -713,7 +793,7 @@ namespace NW.FairyToon.Editor
 
         private void SheerFabric()
         {
-            if (!BeginSection("Sheer", "ft.Sheer", null, false, FairyToonBlock.Sheer)) return;
+            if (!BeginSection("Sheer", "ft.Sheer", null, false, PropertyBlock.Sheer)) return;
             P("_SheerAmount", "Sheer", "Thin fabric such as stockings: the skin colour shows where the fabric faces the view.");
             var amount = Prop("_SheerAmount");
             if (amount != null && (amount.floatValue > 0f || amount.hasMixedValue))
@@ -728,7 +808,7 @@ namespace NW.FairyToon.Editor
         private void Wetness(bool endfield)
         {
             var toggle = Prop("_UseWet");
-            if (toggle == null || !BeginSection("Wetness", "ft.Wetness", toggle, false, FairyToonBlock.Wetness)) return;
+            if (toggle == null || !BeginSection("Wetness", "ft.Wetness", toggle, false, PropertyBlock.Wetness)) return;
             P("_WetPorosity", "Porosity", "Higher values soak and darken more; use low values for skin and metal.");
             P("_WetDarken", "Darken", "Overall wet darkening, scaled by porosity.");
             P("_WetSaturation", "Saturation", "Colour saturation of the wet area.");
@@ -765,7 +845,7 @@ namespace NW.FairyToon.Editor
 
         private void Reflection()
         {
-            if (!BeginSection("Reflection", "sReflection", Prop("_UseReflection"), false, FairyToonBlock.Reflection)) return;
+            if (!BeginSection("Reflection", "sReflection", Prop("_UseReflection"), false, PropertyBlock.Reflection)) return;
             Tex("_SmoothnessTex", "_Smoothness", "Smoothness");
             ScaleOffset("_SmoothnessTex");
             Tex("_MetallicGlossMap", "_Metallic", "Metallic");
@@ -806,13 +886,13 @@ namespace NW.FairyToon.Editor
 
         private void MatCap()
         {
-            if (BeginSection("MatCap", "sMatCapSetting", Prop("_UseMatCap"), false, FairyToonBlock.MatCap))
+            if (BeginSection("MatCap", "sMatCapSetting", Prop("_UseMatCap"), false, PropertyBlock.MatCap1st))
             {
                 MatCapLayer("");
                 EndSection();
             }
             // (2nd works without the 1st: either one turns on _FT_MATCAP)
-            if (!BeginSection("MatCap2nd", "sMatCap2nd", Prop("_UseMatCap2nd"), false, FairyToonBlock.MatCap2nd)) return;
+            if (!BeginSection("MatCap2nd", "sMatCap2nd", Prop("_UseMatCap2nd"), false, PropertyBlock.MatCap2nd)) return;
             MatCapLayer("2nd");
             EndSection();
         }
@@ -849,7 +929,7 @@ namespace NW.FairyToon.Editor
 
         private void RimLight()
         {
-            if (!BeginSection("Rim", "sRimLightSetting", Prop("_UseRim"), false, FairyToonBlock.Rim)) return;
+            if (!BeginSection("Rim", "sRimLightSetting", Prop("_UseRim"), false, PropertyBlock.RimLight)) return;
             Tex("_RimColorTex", "_RimColor", "Color");
             P("_RimBorder");
             P("_RimBlur");
@@ -878,7 +958,7 @@ namespace NW.FairyToon.Editor
 
         private void RimShade()
         {
-            if (!BeginSection("RimShade", "sRimShadeSetting", Prop("_UseRimShade"), false, FairyToonBlock.RimShade)) return;
+            if (!BeginSection("RimShade", "sRimShadeSetting", Prop("_UseRimShade"), false, PropertyBlock.RimShade)) return;
             Tex("_RimShadeMask", "_RimShadeColor", "Color / Mask");
             P("_RimShadeBorder");
             P("_RimShadeBlur");
@@ -889,7 +969,7 @@ namespace NW.FairyToon.Editor
 
         private void Glitter()
         {
-            if (!BeginSection("Glitter", "sGlitterSetting", Prop("_UseGlitter"), false, FairyToonBlock.Glitter)) return;
+            if (!BeginSection("Glitter", "sGlitterSetting", Prop("_UseGlitter"), false, PropertyBlock.Glitter)) return;
             P("_GlitterUVMode");
             Tex("_GlitterColorTex", "_GlitterColor", "Color");
             P("_GlitterColorTex_UVMode");
@@ -923,7 +1003,7 @@ namespace NW.FairyToon.Editor
 
         private void Outline()
         {
-            if (!BeginSection("Outline", "sOutlineSetting", Prop("_UseOutline"), false, FairyToonBlock.Outline)) return;
+            if (!BeginSection("Outline", "sOutlineSetting", Prop("_UseOutline"), false, PropertyBlock.Outline)) return;
             bool endfield = Float("_ShadingModel") > 0.5f;
             if (endfield)
             {
@@ -968,7 +1048,7 @@ namespace NW.FairyToon.Editor
 
         private void Refraction()
         {
-            if (!BeginSection("Refraction", "sRefractionSetting", null, true, FairyToonBlock.Refraction)) return;
+            if (!BeginSection("Refraction", "sRefractionSetting", null, true, PropertyBlock.Refraction)) return;
             Help("Refraction samples the opaque scene color. Transparent objects are not included.", MessageType.None);
             P("_RefractionStrength", "Strength");
             P("_RefractionFresnelPower", "Fresnel Power");
@@ -985,7 +1065,7 @@ namespace NW.FairyToon.Editor
 
         private void Fur()
         {
-            if (!BeginSection("Fur", "sFurSetting", null, true, FairyToonBlock.Fur)) return;
+            if (!BeginSection("Fur", "sFurSetting", null, true, PropertyBlock.Fur)) return;
             FurMode();
             Help("Fur does not render Outline or See-through Hair. Their settings are kept when switching modes.", MessageType.None);
             Tex("_FurNoiseMask", null, "Noise");
@@ -1001,7 +1081,6 @@ namespace NW.FairyToon.Editor
             P("_FurLayerNum", "Layers");
             P("_FurRootOffset", "Root Width");
             P("_FurCutoutLength", "Cutout Length");
-            using (new EditorGUI.DisabledScope(true)) P("_FurTouchStrength", "Touch Strength (unavailable in URP)");
             SubHeader("Rim");
             P("_FurRimColor", "Color");
             P("_FurRimFresnelPower", "Fresnel Power");
@@ -1039,7 +1118,7 @@ namespace NW.FairyToon.Editor
 
         private void Gem()
         {
-            if (!BeginSection("Gem", "sGemSetting", null, true, FairyToonBlock.Gem)) return;
+            if (!BeginSection("Gem", "sGemSetting", null, true, PropertyBlock.Gem)) return;
             Help("Gem refraction samples the opaque scene color. Transparent objects are not included.", MessageType.None);
             P("_RefractionStrength", "Refraction Strength");
             P("_RefractionFresnelPower", "Refraction Fresnel Power");
@@ -1061,7 +1140,7 @@ namespace NW.FairyToon.Editor
         private void SeeThrough()
         {
             var role = Prop("_SeeThroughRole");
-            if (role == null || !BeginSection("SeeThrough", "ft.SeeThrough", null, false, FairyToonBlock.SeeThrough)) return;
+            if (role == null || !BeginSection("SeeThrough", "ft.SeeThrough", null, false, PropertyBlock.SeeThrough)) return;
             P("_SeeThroughRole", "Role");
             int r = role.hasMixedValue ? -1 : Mathf.RoundToInt(role.floatValue);
             if (r == FairyToonMaterialSetup.RoleNone)
@@ -1127,7 +1206,7 @@ namespace NW.FairyToon.Editor
 
         private void Stencil()
         {
-            if (!BeginSection("Stencil", "sStencilSetting", null, false, FairyToonBlock.Stencil)) return;
+            if (!BeginSection("Stencil", "sStencilSetting", null, false, PropertyBlock.Stencil)) return;
             var role = Prop("_SeeThroughRole");
             bool managed = !SelectedSpecialMode()
             && role != null && (role.hasMixedValue || role.floatValue > 0.5f);
@@ -1145,7 +1224,7 @@ namespace NW.FairyToon.Editor
 
         private void Rendering()
         {
-            if (!BeginSection("Rendering", "sRenderingSetting", null, false, FairyToonBlock.Rendering)) return;
+            if (!BeginSection("Rendering", "sRenderingSetting", null, false, PropertyBlock.Rendering)) return;
             m_Editor.RenderQueueField();
             m_Editor.EnableInstancingField();
             m_Editor.DoubleSidedGIField();
@@ -1240,11 +1319,13 @@ namespace NW.FairyToon.Editor
         /// <summary>Shuriken header with a foldout arrow, optional feature toggle, and lilToon's gear menu.</summary>
         /// <remarks>A section whose feature toggle is off stays closed, as in lilToon. The gear copies this section's properties.</remarks>
         private bool BeginSection(string key, string title, MaterialProperty toggle = null, bool openByDefault = false,
-        FairyToonBlock block = FairyToonBlock.None)
+            PropertyBlock? block = null)
         {
             string prefsKey = PrefsPrefix + "Foldout." + key;
             bool open = EditorPrefs.GetBool(prefsKey, openByDefault);
             string shown = FairyToonL10n.Text(title);
+            bool titleHit = Searching && Hit(shown);
+            if (Searching && !Relaxed && !titleHit && (block == null || !BlockHit(block.Value))) return false;
 
             EditorGUILayout.Space(2f);
             Rect rect = GUILayoutUtility.GetRect(16f, 22f, GUILayout.ExpandWidth(true));
@@ -1274,8 +1355,8 @@ namespace NW.FairyToon.Editor
             GUI.Label(new Rect(x, rect.y, Mathf.Max(0f, gear.x - x - 2f), rect.height), shown, s_HeaderLabel);
 
             Event e = Event.current;
-            if (block != FairyToonBlock.None && GUI.Button(gear, EditorGUIUtility.IconContent("_Popup"), s_Gear))
-                FairyToonClipboard.ShowMenu(block, m_Editor);
+            if (block.HasValue && GUI.Button(gear, EditorGUIUtility.IconContent("_Popup"), s_Gear))
+                FairyToonClipboard.ShowMenu(block.Value, m_Editor);
             Rect click = rect;
             click.width = Mathf.Max(0f, click.width - 24f);
             if (e.type == EventType.MouseDown && e.button == 0 && click.Contains(e.mousePosition))
@@ -1286,20 +1367,31 @@ namespace NW.FairyToon.Editor
             if (e.type == EventType.Repaint) EditorStyles.foldout.Draw(arrow, false, false, open, false);
 
             if (!open || !on) return false;
+            m_SearchRelax.Add(titleHit || Relaxed);
             EditorGUILayout.BeginVertical(s_Box);
             return true;
         }
 
-        private static void EndSection() => EditorGUILayout.EndVertical();
-
-        private static void SubHeader(string title)
+        private void EndSection()
         {
-            EditorGUILayout.Space(4f);
-            EditorGUILayout.LabelField(FairyToonL10n.Text(title), EditorStyles.boldLabel);
+            if (m_SearchRelax.Count > 0) m_SearchRelax.RemoveAt(m_SearchRelax.Count - 1);
+            EditorGUILayout.EndVertical();
         }
 
-        private static void Help(string message, MessageType type) =>
-        EditorGUILayout.HelpBox(FairyToonL10n.Text(message), type);
+        private void SubHeader(string title)
+        {
+            string shown = FairyToonL10n.Text(title);
+            if (Searching && !Relaxed && !Hit(shown)) return;
+            EditorGUILayout.Space(4f);
+            EditorGUILayout.LabelField(shown, EditorStyles.boldLabel);
+        }
+
+        private void Help(string message, MessageType type)
+        {
+            string shown = FairyToonL10n.Text(message);
+            if (Searching && !Relaxed && !Hit(shown)) return;
+            EditorGUILayout.HelpBox(shown, type);
+        }
 
         private MaterialProperty Prop(string name) => FindProperty(name, m_Props, false);
 
@@ -1321,7 +1413,7 @@ namespace NW.FairyToon.Editor
 
         private void ToonIris()
         {
-            if (!BeginSection("Iris", "ft.Iris", Prop("_EFIris"), false, FairyToonBlock.Iris)) return;
+            if (!BeginSection("Iris", "ft.Iris", Prop("_EFIris"), false, PropertyBlock.Iris)) return;
             Help("Head vectors come from FairyToonFaceShadow; without it the object axes are used (gaze then ignores head turns).", MessageType.None);
             // The section header owns the Toon toggle; Endfield keeps its existing inline toggle and placement.
             Iris(false);
@@ -1358,7 +1450,7 @@ namespace NW.FairyToon.Editor
             P("_EFIrisGlowStrength", "Glow Strength", "Strength of the coloured glow; 0 removes glow without changing the reflection.");
             P("_EFIrisSparkleScale", "Matcap Scale", "Size of the reflection pattern; larger values make the window panes smaller.");
             P("_EFIrisGlowColor", "Glow Colour", "Colour and brightness of the glow screened over the iris.");
-            if (BeginSection("IrisAvatarData", "ft.IrisAvatar", null, false, FairyToonBlock.IrisAvatar))
+            if (BeginSection("IrisAvatarData", "ft.IrisAvatar", null, false, PropertyBlock.IrisAvatar))
             {
                 P("_EFIrisFrame", "Frame (linear data, baked from UV islands)", "Baked eye-island data that keeps iris motion aligned to this avatar's mesh.");
                 P("_EFIrisWorldRadius", "Iris World Radius", "World size of one iris radius in metres, measured from the mesh. Re-measure after rescaling.");
@@ -1385,6 +1477,7 @@ namespace NW.FairyToon.Editor
             var prop = Prop(name);
             if (prop == null) return;
             string shown = label != null ? FairyToonL10n.Text(label) : FairyToonL10n.Property(name, prop.displayName);
+            if (!RowVisible(name, shown)) return;
             string tip = string.IsNullOrEmpty(tooltip) ? null : FairyToonL10n.Text(tooltip);
             m_Editor.ShaderProperty(prop, new GUIContent(shown, tip));
         }
@@ -1393,9 +1486,11 @@ namespace NW.FairyToon.Editor
         {
             var prop = Prop(name);
             if (prop == null) return;
+            string shown = FairyToonL10n.Text(label);
+            if (!RowVisible(name, shown)) return;
             EditorGUI.showMixedValue = prop.hasMixedValue;
             EditorGUI.BeginChangeCheck();
-            bool value = EditorGUILayout.ToggleLeft(FairyToonL10n.Text(label), prop.floatValue > 0.5f, EditorStyles.boldLabel);
+            bool value = EditorGUILayout.ToggleLeft(shown, prop.floatValue > 0.5f, EditorStyles.boldLabel);
             if (EditorGUI.EndChangeCheck()) prop.floatValue = value ? 1f : 0f;
             EditorGUI.showMixedValue = false;
         }
@@ -1405,10 +1500,12 @@ namespace NW.FairyToon.Editor
         {
             var tex = Prop(texture);
             if (tex == null) return;
+            string shown = FairyToonL10n.Text(label);
+            if (!RowVisible(texture, shown) && (extra == null || !RowVisible(extra, shown))) return;
             var other = extra != null ? Prop(extra) : null;
             // These lilToon colours are gamma-authored even above 1; HDR editing must not add the native HDR flag.
             // TexturePropertySingleLine ignores custom drawers, so any [FairyToonHDR] colour takes the HDR picker here.
-            var content = new GUIContent(FairyToonL10n.Text(label));
+            var content = new GUIContent(shown);
             if (other != null && IsGammaHdr(extra))
             m_Editor.TexturePropertyWithHDRColor(content, tex, other, true);
             else
@@ -1426,6 +1523,7 @@ namespace NW.FairyToon.Editor
         {
             var tex = Prop(texture);
             if (tex == null || (tex.propertyFlags & UnityEngine.Rendering.ShaderPropertyFlags.NoScaleOffset) != 0) return;
+            if (!RowVisible(texture, null)) return;
             using (new EditorGUI.IndentLevelScope()) m_Editor.TextureScaleOffsetProperty(tex);
         }
 

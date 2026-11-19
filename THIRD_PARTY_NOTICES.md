@@ -13,8 +13,9 @@ Some inspector wording and the shape of the material inspector are adapted from 
 Adapted in this package:
 
 - `Editor/FairyToonL10n.cs` and `Editor/FairyToonL10n.Catalog.cs` (editor-mode names, section titles, and other strings taken from the `.po` files)
-- `Editor/FairyToonClipboard.cs` (per-section Copy, Paste, Paste (with texture), Reset)
-- `Editor/FairyToonGUI.cs` (Advanced / Preset / Shader Setting toolbar, Shuriken foldout header, gear menu, section order)
+- `Editor/FairyToonPropertyBlocks.cs` (property names, texture flags, and property-block membership from `lilMaterialProperties.cs`)
+- `Editor/FairyToonClipboard.cs` (accumulating `CopiedProperties` / `CopiedVectorProperties`, Copy, Paste, Paste with texture, Reset)
+- `Editor/FairyToonGUI.cs` (Advanced / Preset / Shader Setting toolbar, search field, Shuriken foldout header, parent and child gears, section order)
 
 The license text below is the `LICENSE` file at that commit.
 

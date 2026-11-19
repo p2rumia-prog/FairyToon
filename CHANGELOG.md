@@ -2,7 +2,7 @@
 
 ## 0.2.1
 
-- Inspector only. Advanced / Preset / Shader Setting replace Simple / Advanced. Labels go through English, Japanese, and Simplified Chinese. Lighting is its own foldout, sections sit under lilToon group headers, and each section has Copy / Paste / Paste (with texture) / Reset. No shader or material-default change.
+- Inspector only. Advanced / Preset / Shader Setting replace Simple / Advanced, with lilToon's search field and parent/child copy blocks. Labels go through English, Japanese, and Simplified Chinese. The clipboard accumulates by property name the way lilToon does. No shader or material-default change.
 
 ## 0.2.0 (2026-11-17)
 
