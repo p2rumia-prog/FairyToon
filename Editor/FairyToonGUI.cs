@@ -3019,48 +3019,11 @@ namespace NW.FairyToon.Editor
                 P(colorName, label);
                 return;
             }
-            Rect row = EditorGUILayout.GetControlRect();
-            const float swatch = 50f;
-            const float gap = 4f;
-            float labelWidth = EditorGUIUtility.labelWidth;
-            bool stacked = row.width < labelWidth + 64f + gap + swatch;
-            Rect texRect = row;
-            texRect.xMin = row.x + labelWidth;
-            Rect bar;
-            if (stacked)
-            {
-                EditorGUI.PrefixLabel(row, new GUIContent(shown));
-                EditorGUI.showMixedValue = tex.hasMixedValue;
-                EditorGUI.BeginChangeCheck();
-                var assigned = (Texture)EditorGUI.ObjectField(texRect, tex.textureValue, typeof(Texture), false);
-                if (EditorGUI.EndChangeCheck()) tex.textureValue = assigned;
-                EditorGUI.showMixedValue = false;
-                if (color == null) return;
-                Rect next = EditorGUILayout.GetControlRect();
-                bar = next;
-                bar.xMin = next.x + labelWidth;
-                bar.width = Mathf.Min(swatch, Mathf.Max(0f, next.xMax - bar.xMin));
-            }
-            else
-            {
-                EditorGUI.PrefixLabel(row, new GUIContent(shown));
-                texRect.xMax = row.xMax - swatch - gap;
-                bar = new Rect(texRect.xMax + gap, row.y, swatch, row.height);
-                EditorGUI.showMixedValue = tex.hasMixedValue;
-                EditorGUI.BeginChangeCheck();
-                var assigned = (Texture)EditorGUI.ObjectField(texRect, tex.textureValue, typeof(Texture), false);
-                if (EditorGUI.EndChangeCheck()) tex.textureValue = assigned;
-                EditorGUI.showMixedValue = false;
-                if (color == null) return;
-            }
-            if (bar.width < 8f) return;
-            BeginScope(bar, color);
-            EditorGUI.showMixedValue = color.hasMixedValue;
-            EditorGUI.BeginChangeCheck();
-            Color value = EditorGUI.ColorField(bar, GUIContent.none, color.colorValue, true, true, false);
-            if (EditorGUI.EndChangeCheck()) color.colorValue = value;
-            EditorGUI.showMixedValue = false;
-            EndScope();
+            // Same split as lilToon's TexturePropertySingleLine: a 32-point thumbnail in the label
+            // column, and the colour filling the value column.
+            var content = new GUIContent(shown);
+            if (color == null) m_Editor.TexturePropertySingleLine(content, tex);
+            else m_Editor.TexturePropertySingleLine(content, tex, color);
         }
 
         /// <summary>lilToon-style single line: texture slot plus its colour or value.</summary>
