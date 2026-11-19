@@ -91,6 +91,7 @@ namespace NW.FairyToon.Editor
                 material.SetFloat("_FurColorMask", 15f);
                 material.SetFloat("_FurBlendOp", (int)BlendOp.Add);
                 material.SetFloat("_FurBlendOpAlpha", (int)BlendOp.Add);
+                SetFurShellDefaults(material, furMode);
             }
             Apply(material);
         }
@@ -131,6 +132,7 @@ namespace NW.FairyToon.Editor
                 material.SetFloat("_ZWrite", 0f);
             // Explicit transitions migrate canonical defaults; Apply also repairs incompatible coverage queues.
             material.renderQueue = useDefaultQueue ? GetDefaultRenderQueue(renderingMode, furMode) : previousQueue;
+            if (renderingMode == Fur) SetFurShellDefaults(material, furMode);
             Apply(material);
             return true;
         }
@@ -145,8 +147,17 @@ namespace NW.FairyToon.Editor
                 || material.renderQueue == GetDefaultRenderQueue(Fur, previousMode);
             material.SetFloat("_FurMode", furMode);
             if (useDefaultQueue) material.renderQueue = GetDefaultRenderQueue(Fur, furMode);
+            SetFurShellDefaults(material, furMode);
             Apply(material);
             return true;
+        }
+
+        // Cutout shells write depth and mask. Transparent and two-pass shells do not. Ordinary Apply leaves a later edit alone.
+        static void SetFurShellDefaults(Material material, int furMode)
+        {
+            bool cutout = furMode == FurCutout;
+            if (material.HasProperty("_FurZWrite")) material.SetFloat("_FurZWrite", cutout ? 1f : 0f);
+            if (material.HasProperty("_FurAlphaToMask")) material.SetFloat("_FurAlphaToMask", cutout ? 1f : 0f);
         }
 
         public static void Apply(Material material)

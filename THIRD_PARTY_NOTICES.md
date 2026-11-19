@@ -8,7 +8,7 @@ Some inspector wording and the shape of the material inspector are adapted from 
 
 - Project: https://github.com/lilxyzw/lilToon
 - Commit: e698a2f791bd28dd1aabf227c74f14bedeca3587
-- Files used as reference: `Assets/lilToon/Editor/lilEnumeration.cs`, `lilLanguageManager.cs`, `lilEditorGUI.cs`, `lilInspector/lilInspector.cs`, `lilInspector/lilGUIUtility.cs`, `lilInspector/lilMainInspectorGUI.cs`, `lilInspector/lilSettingAndPresetGUI.cs`, `lilInspector/lilMaterialProperties.cs`, `Editor/Localization/en-US.po`, `ja-JP.po`, `zh-Hans.po`, `Editor/Resources/gui_box_outer_*.png`, `gui_box_inner_*.png`, `gui_box_inner_half_*.png`, `gui_custom_box_*.png`
+- Files used as reference: `Assets/lilToon/Editor/lilEnumeration.cs`, `lilLanguageManager.cs`, `lilEditorGUI.cs`, `lilInspector/lilInspector.cs`, `lilInspector/lilGUIUtility.cs`, `lilInspector/lilMainInspectorGUI.cs`, `lilInspector/lilSettingAndPresetGUI.cs`, `lilInspector/lilMaterialProperties.cs`, `lilInspector/lilPropertyGroupDrawerBaseSetting.cs`, `lilInspector/lilPropertyGroupDrawerColorSetting.cs`, `lilToonPropertyDrawer.cs`, `Editor/Localization/en-US.po`, `ja-JP.po`, `zh-Hans.po`, `Editor/Resources/gui_box_outer_*.png`, `gui_box_inner_*.png`, `gui_box_inner_half_*.png`, `gui_custom_box_*.png`
 
 Adapted in this package:
 
@@ -17,7 +17,7 @@ Adapted in this package:
 - `Editor/FairyToonClipboard.cs` (accumulating `CopiedProperties` / `CopiedVectorProperties`, Copy, Paste, Paste with texture, Reset)
 - `Editor/FairyToonGUI.cs` (Advanced / Preset / Shader Setting toolbar, row search, Shuriken foldout header, parent and child gears, localized enum options, section order, and the outer/inner box layout from `lilEditorGUI.InitializeBox` and `InitializeGUIStyles`)
 
-`Editor/Resources/gui_box_*.png` and `gui_custom_box_*.png` are the lilToon 2.4.1 GUI textures, copied under the MIT license above. The inspector uses them with the same `InitializeBox` border, margin and padding as `lilEditorGUI`. The untitled Base box uses `gui_custom_box`.
+`Editor/Resources/gui_box_*.png` and `gui_custom_box_*.png` are the lilToon 2.4.1 GUI textures, copied under the MIT license above. The textures keep lilToon's 4 px and 6 px border slices. FairyToon then sets the outer box margin to (4, 4, 0, 4) and padding to (2, 2, 0, 0), and the inner half and full boxes to margin (2, 2, 0, 2). The header-to-box gap is a separate 2 pt space, not the box top margin. The untitled Base box uses `gui_custom_box`.
 
 The package that ships the GUI textures uses this copyright line: `Copyright (c) 2020-present lilxyzw`.
 
