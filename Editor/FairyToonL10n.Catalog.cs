@@ -519,6 +519,17 @@ namespace NW.FairyToon.Editor
             Add("sOverride", "Override", "上書き", "覆盖");
             Add("sRendering", "Rendering", "レンダリング", "渲染");
             Add("sGemColor", "Color", "色", "颜色");
+            Add("sFresnel", "Fresnel", "フレネル", "菲涅尔");
+            Add("sLength", "Length", "長さ", "长度");
+            Add("sColorAlpha", "Color / Alpha", "色 / 透明度", "主色 / 透明度");
+            Add("sEnvironmentColor", "Environment Color", "環境光の色", "环境光主色");
+            Add("sCubemapFallback", "Cubemap Fallback", "キューブマップの代替", "立方体贴图后备");
+            Add("sFallbackLighting", "Enable Lighting (Fallback)", "ライトの明るさを反映 (代替)", "启用照明 (后备)");
+            Add("sLightDirection", "Light Direction Strength", "ライト方向の強さ", "光线方向强度");
+            Add("sMaskWidth", "Mask & Width", "マスクと幅", "蒙版与宽度");
+            Add("sFixWidth", "Fix width by distance", "距離で幅を固定", "按距离补偿宽度");
+            Add("sZBias", "Z Bias", "Z バイアス", "深度偏移");
+            Add("sVertexColor", "Vertex Color", "頂点カラー", "顶点色");
             Add("ft.FurMode", "Fur Mode", "ファーモード", "毛发模式");
             Add("ft.FurTwoPass", "2 Pass", "2 パス", "双通道");
             Add("p:_Cull", "Cull Mode", "Cull Mode (描画面)", "Cull Mode (剔除模式)");
