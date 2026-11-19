@@ -614,7 +614,7 @@ namespace NW.FairyToon.Editor
             if (!BeginSection("Base", "sBaseSetting", null, true, PropertyBlock.Base, true, true, false)) return;
             P("_ShadingModel", "Shading Model");
             if (!EverySelectedIsGem()) P("_Cull");
-            P("_ZWrite");
+            DrawZWrite();
             if (AnyCoverage(FairyToonMaterialSetup.Cutout, FairyToonMaterialSetup.Transparent, FairyToonMaterialSetup.Fur))
                 P("_Cutoff");
             P("_FlipNormal");

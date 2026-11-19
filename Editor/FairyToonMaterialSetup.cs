@@ -124,6 +124,11 @@ namespace NW.FairyToon.Editor
                 finally { Object.DestroyImmediate(snapshot); }
             }
             if (renderingMode <= Transparent) material.SetFloat("_TransparentMode", renderingMode);
+            // A mode change restores that mode's depth default. A later edit of ZWrite is left alone by Apply.
+            if (renderingMode == Opaque || renderingMode == Cutout)
+                material.SetFloat("_ZWrite", 1f);
+            else if (renderingMode == Gem)
+                material.SetFloat("_ZWrite", 0f);
             // Explicit transitions migrate canonical defaults; Apply also repairs incompatible coverage queues.
             material.renderQueue = useDefaultQueue ? GetDefaultRenderQueue(renderingMode, furMode) : previousQueue;
             Apply(material);
