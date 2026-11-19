@@ -2012,7 +2012,7 @@ namespace NW.FairyToon.Editor
             bool outlineHit = Prop("_OutlineCull") != null
                 && !SelectedRenderingMode(FairyToonMaterialSetup.Fur)
                 && !SelectedRenderingMode(FairyToonMaterialSetup.Gem)
-                && Searching && RowVisible("_OutlineCull", null);
+                && Searching && RowVisible("_OutlineCull", "sCullMode");
             if (!queue && !fur && !outlineHit) return;
             if (!BeginSection("Rendering", "sRenderingSetting", null, false, PropertyBlock.Rendering, true, false)) return;
             if ((!Searching || LabelOnly("sRenderingReset")) && GUILayout.Button(FairyToonL10n.Text("sRenderingReset")))
@@ -2089,12 +2089,12 @@ namespace NW.FairyToon.Editor
             bool outline = Prop("_OutlineCull") != null
                 && !SelectedRenderingMode(FairyToonMaterialSetup.Fur)
                 && !SelectedRenderingMode(FairyToonMaterialSetup.Gem)
-                && (!Searching || RowVisible("_OutlineCull", null));
+                && (!Searching || RowVisible("_OutlineCull", "sCullMode"));
             if (!outline) return;
             EditorGUILayout.BeginVertical(s_Outer);
             EditorGUILayout.LabelField(FairyToonL10n.Text("sOutlineSetting"));
             EditorGUILayout.BeginVertical(s_InnerFull);
-            P("_OutlineCull");
+            P("_OutlineCull", "sCullMode");
             EditorGUILayout.EndVertical();
             EditorGUILayout.EndVertical();
         }
