@@ -63,7 +63,8 @@ namespace NW.FairyToon.Editor
             int mode = GetRenderingMode(material);
             if (previousMode > Transparent || mode > Transparent || previousMode == mode) return;
             bool useDefaultQueue = previousRawQueue < 0 || previousQueue == GetDefaultRenderQueue(previousMode);
-            material.renderQueue = useDefaultQueue ? -1 : previousQueue;
+            // -1 is the native From Shader value. A mode change that wants the canonical queue sets it explicitly.
+            material.renderQueue = useDefaultQueue ? GetDefaultRenderQueue(mode) : previousQueue;
         }
 
         public static bool SetRenderingMode(Material material, int renderingMode)
@@ -96,7 +97,7 @@ namespace NW.FairyToon.Editor
             }
             if (renderingMode <= Transparent) material.SetFloat("_TransparentMode", renderingMode);
             // Explicit transitions migrate canonical defaults; Apply also repairs incompatible coverage queues.
-            material.renderQueue = useDefaultQueue ? -1 : previousQueue;
+            material.renderQueue = useDefaultQueue ? GetDefaultRenderQueue(renderingMode, furMode) : previousQueue;
             Apply(material);
             return true;
         }
@@ -110,7 +111,7 @@ namespace NW.FairyToon.Editor
             bool useDefaultQueue = material.rawRenderQueue < 0
                 || material.renderQueue == GetDefaultRenderQueue(Fur, previousMode);
             material.SetFloat("_FurMode", furMode);
-            if (useDefaultQueue) material.renderQueue = -1;
+            if (useDefaultQueue) material.renderQueue = GetDefaultRenderQueue(Fur, furMode);
             Apply(material);
             return true;
         }
@@ -127,14 +128,14 @@ namespace NW.FairyToon.Editor
             bool furTwoPass = fur && furMode == FurTwoPass;
             // Read the previous Apply state before the coverage keyword is updated below.
             bool managedHairQueue = IsManagedHairQueue(material);
-            bool deriveQueue = material.rawRenderQueue < 0;
-            if (deriveQueue) material.renderQueue = GetDefaultRenderQueue(renderingMode, furMode);
+            // rawRenderQueue < 0 is Unity's From Shader. Leave it so the popup can stay on that choice.
+            bool inheritQueue = material.rawRenderQueue < 0;
             if (special)
             {
                 material.SetFloat("_TransparentMode", fur && furMode == FurCutout ? Cutout : Transparent);
             }
             int mode = Mathf.RoundToInt(Get(material, "_TransparentMode"));
-            if (!special)
+            if (!special && !inheritQueue)
             {
                 int queue = material.renderQueue;
                 bool coverageDefault = queue == (int)RenderQueue.Geometry || queue == (int)RenderQueue.AlphaTest;
@@ -301,7 +302,8 @@ namespace NW.FairyToon.Editor
             else ResetManagedStencil(material);
 
             int hairQueue = (int)RenderQueue.AlphaTest + 10;
-            if (hair && mode != Transparent && material.renderQueue < hairQueue)
+            // An explicit queue below 2460 is the managed hair slot. From Shader (raw -1) stays inherited.
+            if (hair && mode != Transparent && material.rawRenderQueue >= 0 && material.renderQueue < hairQueue)
             {
                 material.renderQueue = hairQueue;
                 managedHairQueue = true;
