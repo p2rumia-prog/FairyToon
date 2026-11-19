@@ -2916,6 +2916,13 @@ namespace NW.FairyToon.Editor
             EditorGUI.indentLevel--;
         }
 
+        private static bool NarrowHdrRow()
+        {
+            float indent = EditorGUI.indentLevel * 15f;
+            float room = EditorGUIUtility.currentViewWidth - EditorGUIUtility.labelWidth - indent;
+            return room < 50f + 4f + 72f;
+        }
+
         private void P(string name, string label = null, string tooltip = null)
         {
             var prop = Prop(name);
@@ -2929,8 +2936,10 @@ namespace NW.FairyToon.Editor
                 if (IsGammaHdr(name) || IsBuiltinHdr(name))
                 {
                     Rect row = EditorGUILayout.GetControlRect();
-                    float valueRoom = row.xMax - row.x - EditorGUIUtility.labelWidth;
-                    Rect hexLine = valueRoom < 50f + 4f + 72f ? EditorGUILayout.GetControlRect() : default;
+                    // A control rect is a 1px placeholder during Layout, so its width must not decide
+                    // whether another row is reserved. currentViewWidth is the same on both passes.
+                    Rect hexLine = default;
+                    if (NarrowHdrRow()) hexLine = EditorGUILayout.GetControlRect();
                     BeginScope(row, prop);
                     try
                     {
