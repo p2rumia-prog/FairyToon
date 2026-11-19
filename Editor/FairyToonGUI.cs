@@ -2177,8 +2177,8 @@ namespace NW.FairyToon.Editor
             string shown = FairyToonL10n.Text(title);
             if (foldout)
             {
-                EditorGUILayout.Space(2f);
-                Rect rect = GUILayoutUtility.GetRect(16f, 22f, GUILayout.ExpandWidth(true));
+                // 20 points is 30 px at 150%, the pitch of a collapsed lilToon header.
+                Rect rect = GUILayoutUtility.GetRect(16f, 20f, GUILayout.ExpandWidth(true));
                 if (s_Foldout != null) GUI.Box(rect, GUIContent.none, s_Foldout);
                 float x = rect.x + 4f;
                 Rect arrow = new Rect(x, rect.y + 3f, 14f, 16f);
