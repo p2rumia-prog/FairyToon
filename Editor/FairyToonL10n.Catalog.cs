@@ -1103,6 +1103,12 @@ namespace NW.FairyToon.Editor
             Add("ft.AlphaMaskInvert", "Invert", "反転", "反转");
             Add("ft.AlphaMaskTransparency", "Transparency", "透明度", "透明度");
             Add("ft.AlphaMaskAdvanced", "Show advanced editor", "詳細編集を表示", "显示高级编辑");
+            Add("ft.DissolveOff", "Off", "オフ", "关闭");
+            Add("ft.DissolveMask", "Texture Mask", "テクスチャマスク", "纹理遮罩");
+            Add("ft.DissolveUV", "UV", "UV", "UV");
+            Add("ft.DissolveObject", "Object Position", "オブジェクト位置", "物体位置");
+            Add("ft.DissolveRadial", "Radial", "放射", "径向");
+            Add("ft.DissolveLinear", "Linear", "線形", "线性");
             Add("Off", "Off", "Off (両面を描画)", "关闭");
             Add("Front", "Front", "Front (裏面のみ描画)", "正面");
             Add("Back", "Back", "Back (前面のみ描画)", "背面");

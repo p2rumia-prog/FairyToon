@@ -1773,6 +1773,7 @@ test('mixed Rendering and Fur popups change every target only after a user selec
                 Undo: { RecordObjects: targets => undo.push(targets.length) }, EditorUtility: { SetDirty() {} },
                 MaterialEditor: { GetMaterialProperties: () => [] }, GUIUtility: { ExitGUI() {} },
                 RowVisible: () => true, FairyToonL10n: { Text: (key) => key },
+                Number: (prop) => prop.floatValue,
                 Debug: { LogError: () => assert.fail('known rendering mode must exist') },
             };
             new Function(...Object.keys(bindings), body)(...Object.values(bindings));

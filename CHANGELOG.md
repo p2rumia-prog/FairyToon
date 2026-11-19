@@ -2,7 +2,7 @@
 
 ## 0.2.1
 
-- Inspector only. Advanced / Preset / Shader Setting replace Simple / Advanced. Search matches drawn rows, including mode popups, tooltips, and the render queue. Main Color 1st and Alpha Mask follow lilToon's label-and-gear layout. Scalar reads follow ShaderLab: legacy `Int` is a float, `Integer` is a real int. The clipboard uses the inspector's MaterialProperty objects, skips Apply when nothing was written or an animation callback owns the write, and migrates the coverage queue on a real Base paste or reset. Language can follow the editor. No shader or material-default change.
+- Inspector only. Advanced / Preset / Shader Setting replace Simple / Advanced. Search matches the drawn label and tooltip, not only the property name. Main Color 1st is a label and gear. Alpha Mask puts its gear on the Mode row, including on Refraction, and shows only a warning on Opaque. Scalar reads follow ShaderLab: legacy `Int` is a float, `Integer` is a real int. Paste and Reset do nothing when the values already match, do not Apply while an animation or property-block callback owns the write, and otherwise migrate the coverage queue in that undo step. Language can follow the editor. No shader or material-default change.
 
 ## 0.2.0 (2026-11-17)
 

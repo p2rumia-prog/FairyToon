@@ -102,10 +102,11 @@ namespace NW.FairyToon.Editor
         {
             var material = editor.target as Material;
             if (material == null || props == null) return;
-            string undo = shouldCopyTex ? "FairyToon Paste (with textures)" : "FairyToon Paste";
-            int group = BeginUndo(editor, undo);
             var coverage = SnapshotCoverage(editor);
-            int writes = 0;
+            if (!PasteWouldChange(block, material, props, shouldCopyTex, out bool callback)) return;
+            string undo = shouldCopyTex ? "FairyToon Paste (with textures)" : "FairyToon Paste";
+            bool direct = !callback && !AnimationMode.InAnimationMode();
+            int group = direct ? BeginUndo(editor, undo) : 0;
             for (int i = 0; i < FairyToonPropertyBlocks.All.Length; i++)
             {
                 FairyToonPropertyEntry entry = FairyToonPropertyBlocks.All[i];
@@ -113,77 +114,145 @@ namespace NW.FairyToon.Editor
                 if (!shouldCopyTex && entry.IsTexture) continue;
                 if (!CopiedProperties.TryGetValue(entry.Name, out MaterialProperty source) || source == null) continue;
                 MaterialProperty dest = Find(props, entry.Name);
-                if (dest == null) continue;
-                ApplyValue(dest, source);
-                writes++;
-                if (!entry.IsTexture || !shouldCopyTex) continue;
+                if (dest != null && ChangesValue(dest, source)) ApplyValue(dest, source);
+                if (!direct || !entry.IsTexture || !shouldCopyTex) continue;
                 string st = entry.Name + "_ST";
-                if (CopiedVectorProperties.ContainsKey(st) && material.HasProperty(st))
-                {
-                    material.SetVector(st, CopiedVectorProperties[st]);
-                    writes++;
-                }
+                if (CopiedVectorProperties.TryGetValue(st, out Vector4 scale) && material.HasProperty(st) && material.GetVector(st) != scale)
+                    material.SetVector(st, scale);
             }
-            FinishEdit(editor, group, coverage, writes);
+            if (!direct) return;
+            MigrateCoverage(coverage);
+            ApplyMaterials(editor);
+            Undo.CollapseUndoOperations(group);
         }
 
         internal static void ResetProperties(PropertyBlock block, MaterialEditor editor, MaterialProperty[] props)
         {
             if (props == null) return;
-            int group = BeginUndo(editor, "FairyToon Reset");
             var coverage = SnapshotCoverage(editor);
-            int writes = 0;
+            if (!ResetWouldChange(block, props, out bool callback)) return;
+            bool direct = !callback && !AnimationMode.InAnimationMode();
+            int group = direct ? BeginUndo(editor, "FairyToon Reset") : 0;
             for (int i = 0; i < props.Length; i++)
             {
                 MaterialProperty prop = props[i];
-                if (prop == null || !FairyToonPropertyBlocks.Belongs(block, prop.name)) continue;
-                if (prop.targets == null || prop.targets.Length == 0 || !(prop.targets[0] is Material material) || material.shader == null)
-                    continue;
-                Shader shader = material.shader;
-                int index = shader.FindPropertyIndex(prop.name);
-                if (index < 0) continue;
-                switch (prop.propertyType)
-                {
-                    case ShaderPropertyType.Color:
-                        Vector4 color = shader.GetPropertyDefaultVectorValue(index);
-                        prop.colorValue = new Color(color.x, color.y, color.z, color.w);
-                        break;
-                    case ShaderPropertyType.Vector:
-                        prop.vectorValue = shader.GetPropertyDefaultVectorValue(index);
-                        break;
-                    case ShaderPropertyType.Float:
-                    case ShaderPropertyType.Range:
-                        prop.floatValue = shader.GetPropertyDefaultFloatValue(index);
-                        break;
-                    case ShaderPropertyType.Int:
-                        prop.intValue = shader.GetPropertyDefaultIntValue(index);
-                        break;
-                    case ShaderPropertyType.Texture:
-                        prop.textureValue = null;
-                        break;
-                    default:
-                        throw new InvalidOperationException("Unhandled shader property type " + prop.propertyType);
-                }
-                writes++;
+                if (!ResetTarget(prop, block, out Shader shader, out int index) || AlreadyDefault(prop, shader, index)) continue;
+                ApplyDefault(prop, shader, index);
             }
-            FinishEdit(editor, group, coverage, writes);
+            if (!direct) return;
+            MigrateCoverage(coverage);
+            ApplyMaterials(editor);
+            Undo.CollapseUndoOperations(group);
         }
 
-        private static void FinishEdit(MaterialEditor editor, int group, List<CoverageSnapshot> coverage, int writes)
+        private static bool PasteWouldChange(PropertyBlock block, Material material, MaterialProperty[] props, bool shouldCopyTex, out bool callback)
         {
-            if (writes == 0)
+            callback = false;
+            bool change = false;
+            for (int i = 0; i < FairyToonPropertyBlocks.All.Length; i++)
             {
-                Undo.RevertAllDownToGroup(group);
-                return;
+                FairyToonPropertyEntry entry = FairyToonPropertyBlocks.All[i];
+                if (!Contains(entry, block) || (!shouldCopyTex && entry.IsTexture)) continue;
+                if (!CopiedProperties.TryGetValue(entry.Name, out MaterialProperty source) || source == null) continue;
+                MaterialProperty dest = Find(props, entry.Name);
+                if (dest == null) continue;
+                if (dest.applyPropertyCallback != null) callback = true;
+                if (ChangesValue(dest, source)) change = true;
+                if (!shouldCopyTex || !entry.IsTexture) continue;
+                string st = entry.Name + "_ST";
+                if (CopiedVectorProperties.TryGetValue(st, out Vector4 scale) && material.HasProperty(st) && material.GetVector(st) != scale)
+                    change = true;
             }
-            // Property writes already go through the inspector descriptors. Apply rewrites blend, queue
-            // and passes on the material asset, so skip it while an animation callback owns the write.
-            if (!AnimationMode.InAnimationMode())
+            return change;
+        }
+
+        private static bool ResetWouldChange(PropertyBlock block, MaterialProperty[] props, out bool callback)
+        {
+            callback = false;
+            bool change = false;
+            for (int i = 0; i < props.Length; i++)
             {
-                MigrateCoverage(coverage);
-                ApplyMaterials(editor);
+                MaterialProperty prop = props[i];
+                if (!ResetTarget(prop, block, out Shader shader, out int index)) continue;
+                if (prop.applyPropertyCallback != null) callback = true;
+                if (!AlreadyDefault(prop, shader, index)) change = true;
             }
-            Undo.CollapseUndoOperations(group);
+            return change;
+        }
+
+        private static bool ResetTarget(MaterialProperty prop, PropertyBlock block, out Shader shader, out int index)
+        {
+            shader = null;
+            index = -1;
+            if (prop == null || !FairyToonPropertyBlocks.Belongs(block, prop.name)) return false;
+            if (prop.targets == null || prop.targets.Length == 0 || !(prop.targets[0] is Material material) || material.shader == null)
+                return false;
+            shader = material.shader;
+            index = shader.FindPropertyIndex(prop.name);
+            return index >= 0;
+        }
+
+        private static bool ChangesValue(MaterialProperty dest, MaterialProperty source)
+        {
+            if (dest.hasMixedValue) return true;
+            switch (dest.propertyType)
+            {
+                case ShaderPropertyType.Color: return dest.colorValue != source.colorValue;
+                case ShaderPropertyType.Vector: return dest.vectorValue != source.vectorValue;
+                case ShaderPropertyType.Float:
+                case ShaderPropertyType.Range: return dest.floatValue != source.floatValue;
+                case ShaderPropertyType.Int: return dest.intValue != source.intValue;
+                case ShaderPropertyType.Texture: return dest.textureValue != source.textureValue;
+                default: throw new InvalidOperationException("Unhandled shader property type " + dest.propertyType);
+            }
+        }
+
+        private static bool AlreadyDefault(MaterialProperty prop, Shader shader, int index)
+        {
+            if (prop.hasMixedValue) return false;
+            switch (prop.propertyType)
+            {
+                case ShaderPropertyType.Color:
+                    Vector4 color = shader.GetPropertyDefaultVectorValue(index);
+                    return prop.colorValue == new Color(color.x, color.y, color.z, color.w);
+                case ShaderPropertyType.Vector:
+                    return prop.vectorValue == shader.GetPropertyDefaultVectorValue(index);
+                case ShaderPropertyType.Float:
+                case ShaderPropertyType.Range:
+                    return prop.floatValue == shader.GetPropertyDefaultFloatValue(index);
+                case ShaderPropertyType.Int:
+                    return prop.intValue == shader.GetPropertyDefaultIntValue(index);
+                case ShaderPropertyType.Texture:
+                    return prop.textureValue == null;
+                default:
+                    throw new InvalidOperationException("Unhandled shader property type " + prop.propertyType);
+            }
+        }
+
+        private static void ApplyDefault(MaterialProperty prop, Shader shader, int index)
+        {
+            switch (prop.propertyType)
+            {
+                case ShaderPropertyType.Color:
+                    Vector4 color = shader.GetPropertyDefaultVectorValue(index);
+                    prop.colorValue = new Color(color.x, color.y, color.z, color.w);
+                    break;
+                case ShaderPropertyType.Vector:
+                    prop.vectorValue = shader.GetPropertyDefaultVectorValue(index);
+                    break;
+                case ShaderPropertyType.Float:
+                case ShaderPropertyType.Range:
+                    prop.floatValue = shader.GetPropertyDefaultFloatValue(index);
+                    break;
+                case ShaderPropertyType.Int:
+                    prop.intValue = shader.GetPropertyDefaultIntValue(index);
+                    break;
+                case ShaderPropertyType.Texture:
+                    prop.textureValue = null;
+                    break;
+                default:
+                    throw new InvalidOperationException("Unhandled shader property type " + prop.propertyType);
+            }
         }
 
         private static void ApplyValue(MaterialProperty dest, MaterialProperty source)

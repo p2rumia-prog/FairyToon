@@ -130,10 +130,14 @@ namespace NW.FairyToon.Editor.Tests
             Assert.IsNotNull(shader, "FairyToon shader must be imported. EditMode tests fail instead of skipping a missing shader.");
             Material opaque = Track(new Material(shader));
             Material cutout = Track(new Material(shader));
+            Material transparent = Track(new Material(shader));
             FairyToonMaterialSetup.SetRenderingMode(opaque, FairyToonMaterialSetup.Opaque);
             FairyToonMaterialSetup.SetRenderingMode(cutout, FairyToonMaterialSetup.Cutout);
+            FairyToonMaterialSetup.SetRenderingMode(transparent, FairyToonMaterialSetup.Transparent);
             Assert.AreEqual(2450, cutout.renderQueue);
-            bool shadowBefore = cutout.GetShaderPassEnabled("ShadowCaster");
+            Assert.AreEqual("TransparentCutout", cutout.GetTag("RenderType", false));
+            Assert.IsFalse(transparent.GetShaderPassEnabled("DepthOnly"));
+            Assert.AreEqual("Transparent", transparent.GetTag("RenderType", false));
             MaterialProperty[] sourceProps = Properties(opaque);
             MaterialProperty[] destProps = Properties(cutout);
             FairyToonClipboard.CopyProperties(PropertyBlock.Base, EditorFor(opaque), sourceProps);
@@ -141,13 +145,21 @@ namespace NW.FairyToon.Editor.Tests
             Assert.AreEqual(FairyToonMaterialSetup.Opaque, FairyToonMaterialSetup.GetRenderingMode(cutout));
             Assert.AreEqual(2000, cutout.renderQueue);
             Assert.IsFalse(cutout.IsKeywordEnabled("_ALPHATEST_ON"));
-            bool shadowAfter = cutout.GetShaderPassEnabled("ShadowCaster");
+            Assert.AreEqual("Opaque", cutout.GetTag("RenderType", false));
             Undo.PerformUndo();
             Assert.AreEqual(FairyToonMaterialSetup.Cutout, FairyToonMaterialSetup.GetRenderingMode(cutout));
             Assert.AreEqual(2450, cutout.renderQueue);
             Assert.IsTrue(cutout.IsKeywordEnabled("_ALPHATEST_ON"));
-            Assert.AreEqual(shadowBefore, cutout.GetShaderPassEnabled("ShadowCaster"));
-            Assert.AreEqual(shadowAfter, cutout.GetShaderPassEnabled("ShadowCaster"));
+            Assert.AreEqual("TransparentCutout", cutout.GetTag("RenderType", false));
+
+            FairyToonClipboard.CopyProperties(PropertyBlock.Base, EditorFor(cutout), Properties(cutout));
+            FairyToonClipboard.PasteProperties(PropertyBlock.Base, EditorFor(transparent), Properties(transparent), false);
+            Assert.IsTrue(transparent.GetShaderPassEnabled("DepthOnly"));
+            Assert.AreEqual("TransparentCutout", transparent.GetTag("RenderType", false));
+            Undo.PerformUndo();
+            Assert.IsFalse(transparent.GetShaderPassEnabled("DepthOnly"));
+            Assert.AreEqual("Transparent", transparent.GetTag("RenderType", false));
+            Assert.IsTrue(transparent.IsKeywordEnabled("_SURFACE_TYPE_TRANSPARENT"));
         }
 
         [Test]

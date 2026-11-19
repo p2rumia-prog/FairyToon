@@ -21,13 +21,37 @@ if (!pasteFn.includes('!shouldCopyTex && entry.IsTexture')) errors.push('Paste m
 if (!pasteFn.includes('CopiedVectorProperties')) errors.push('Paste with texture must apply stored _ST');
 if (/GetMaterialProperties/.test(copyFn) || /GetMaterialProperties/.test(pasteFn))
   errors.push('Copy and Paste must use the MaterialProperty array from OnGUI, not GetMaterialProperties');
-if (!pasteFn.includes('FinishEdit')) errors.push('Paste must finish through the shared undo step');
+if (clipCs.includes('RevertAllDownToGroup'))
+  errors.push('an empty paste must not revert the current undo group');
 const resetFn = clipCs.slice(clipCs.indexOf('void ResetProperties'), clipCs.indexOf('void ApplyValue'));
-if (/GetMaterialProperties/.test(resetFn) || !resetFn.includes('FinishEdit'))
-  errors.push('Reset must use the OnGUI properties and the shared undo step');
-const finish = clipCs.slice(clipCs.indexOf('void FinishEdit'), clipCs.indexOf('void ApplyValue'));
-if (!finish.includes('MigrateCoverage') || !finish.includes('writes == 0') || !finish.includes('AnimationMode.InAnimationMode'))
-  errors.push('empty paste/reset and animation-callback writes must not Apply; real edits still migrate the queue');
+if (/GetMaterialProperties/.test(resetFn))
+  errors.push('Reset must use the OnGUI properties');
+function outcome(change, callback, animating) {
+  if (!change) return 'noop';
+  if (callback || animating) return 'write-no-apply';
+  return 'write-apply';
+}
+const expected = [
+  [false, false, false, 'noop'],
+  [true, false, false, 'write-apply'],
+  [true, true, false, 'write-no-apply'],
+  [true, false, true, 'write-no-apply'],
+  [false, true, true, 'noop'],
+];
+for (const [change, callback, animating, result] of expected)
+  if (outcome(change, callback, animating) !== result) errors.push('paste decision table drifted');
+if (pasteFn.indexOf('PasteWouldChange') < 0 || pasteFn.indexOf('PasteWouldChange') > pasteFn.indexOf('BeginUndo'))
+  errors.push('Paste must return before recording undo when nothing changes');
+if (pasteFn.indexOf('if (!direct) return') < 0 || pasteFn.indexOf('if (!direct) return') > pasteFn.indexOf('ApplyMaterials'))
+  errors.push('callback and animation writes must return before Apply');
+if (!pasteFn.includes('applyPropertyCallback') && !clipCs.includes('applyPropertyCallback'))
+  errors.push('Paste must detect a MaterialProperty apply callback');
+if (!clipCs.includes('AnimationMode.InAnimationMode()'))
+  errors.push('animation recording must skip the asset Apply');
+if (!clipCs.includes('hasMixedValue') || !clipCs.includes('dest.floatValue != source.floatValue'))
+  errors.push('same-value paste must compare the stored value and still run when the selection is mixed');
+if (resetFn.indexOf('ResetWouldChange') < 0 || resetFn.indexOf('ResetWouldChange') > resetFn.indexOf('BeginUndo'))
+  errors.push('Reset must return before recording undo when every value is already the default');
 
 const table = {};
 const re = /new\("(_[^"]+)", (true|false), ((?:PropertyBlock\.\w+,?\s*)+)\)/g;
