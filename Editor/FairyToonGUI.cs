@@ -1737,12 +1737,18 @@ namespace NW.FairyToon.Editor
         private void Refraction()
         {
 
-            if (!SearchAllows("_RefractionStrength", "_RefractionFresnelPower", "_RefractionColorFromMain", "_RefractionColor", "_RefractionStrength|Strength", "_RefractionFresnelPower|Fresnel Power", "_RefractionColorFromMain|sColorFromMain", "_RefractionColor|Color")) return;
+            if (!SearchAllows("_RefractionStrength", "_RefractionFresnelPower", "_RefractionColorFromMain", "_RefractionColor", "_RefractionBlur", "_SmoothnessTex", "_Smoothness", "_RefractionStrength|Strength", "_RefractionFresnelPower|Fresnel Power", "_RefractionColorFromMain|sColorFromMain", "_RefractionColor|Color", "_RefractionBlur|Blur", "_SmoothnessTex|Blur Smoothness")) return;
             if (!BeginSection("Refraction", "sRefraction", null, true, PropertyBlock.Refraction)) return;
             P("_RefractionStrength", "sStrength");
             P("_RefractionFresnelPower", "sFresnel");
             P("_RefractionColorFromMain", "sColorFromMain");
             P("_RefractionColor", "Color");
+            P("_RefractionBlur", "Blur");
+            if (Float("_RefractionBlur") > 0.5f || Prop("_RefractionBlur")?.hasMixedValue == true)
+            {
+                Tex("_SmoothnessTex", "_Smoothness", "Blur Smoothness");
+                ScaleOffset("_SmoothnessTex");
+            }
             EndSection();
         }
 
