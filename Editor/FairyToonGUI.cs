@@ -2534,20 +2534,22 @@ namespace NW.FairyToon.Editor
 
         private static void WriteAlphaMask(MaterialProperty scale, MaterialProperty offset, bool invertChanged, bool transparencyChanged, bool invert, float transparency)
         {
-            bool descriptorInvert = scale.floatValue < 0f;
-            float descriptorTransparency = offset.floatValue - (descriptorInvert ? 1f : 0f);
+            bool descriptorInvert = Number(scale) < 0f;
+            float descriptorTransparency = Number(offset) - (descriptorInvert ? 1f : 0f);
             if (invertChanged) descriptorInvert = invert;
             if (transparencyChanged) descriptorTransparency = transparency;
             float callbackScale = descriptorInvert ? -1f : 1f;
             float callbackOffset = descriptorTransparency + (descriptorInvert ? 1f : 0f);
-            bool scaleHandled = !invertChanged || OfferFloat(scale, callbackScale);
-            bool offsetHandled = !(invertChanged || transparencyChanged) || OfferFloat(offset, callbackOffset);
-            if (scaleHandled && offsetHandled) return;
+            bool wantScale = invertChanged;
+            bool wantOffset = invertChanged || transparencyChanged;
             if (scale.targets == null) return;
             Undo.IncrementCurrentGroup();
             int group = Undo.GetCurrentGroup();
             try
             {
+                bool scaleHandled = !wantScale || OfferFloat(scale, callbackScale);
+                bool offsetHandled = !wantOffset || OfferFloat(offset, callbackOffset);
+                if (scaleHandled && offsetHandled) return;
                 foreach (Object target in scale.targets)
                 {
                     var material = target as Material;
@@ -2560,8 +2562,8 @@ namespace NW.FairyToon.Editor
                     if (transparencyChanged) storedTransparency = transparency;
                     float nextScale = storedInvert ? -1f : 1f;
                     float nextOffset = storedTransparency + (storedInvert ? 1f : 0f);
-                    bool writeScale = !scaleHandled && !Mathf.Approximately(nextScale, storedScale) && !Locked(material, scale.name);
-                    bool writeOffset = !offsetHandled && !Mathf.Approximately(nextOffset, storedOffset) && !Locked(material, offset.name);
+                    bool writeScale = wantScale && !Locked(material, scale.name) && !Mathf.Approximately(nextScale, storedScale);
+                    bool writeOffset = wantOffset && !Locked(material, offset.name) && !Mathf.Approximately(nextOffset, storedOffset);
                     if (!writeScale && !writeOffset) continue;
                     Undo.RecordObject(material, "Modify Alpha Mask");
                     if (writeScale) material.SetFloat(scale.name, nextScale);
