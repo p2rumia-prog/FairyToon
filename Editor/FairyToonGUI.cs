@@ -2244,8 +2244,8 @@ namespace NW.FairyToon.Editor
                 if (EditorGUI.EndChangeCheck())
                 {
                     int mask = 0;
-                    if (!Mathf.Approximately(scroll.x, before.x)) { value.x = scroll.x; mask |= 1; }
-                    if (!Mathf.Approximately(scroll.y, before.y)) { value.y = scroll.y; mask |= 2; }
+                if (property.hasMixedValue || !Mathf.Approximately(scroll.x, before.x)) { value.x = scroll.x; mask |= 1; }
+                if (property.hasMixedValue || !Mathf.Approximately(scroll.y, before.y)) { value.y = scroll.y; mask |= 2; }
                     if (mask != 0) SetDissolveComponents(property, value, mask);
                 }
                 EditorGUI.showMixedValue = false;
@@ -2314,9 +2314,9 @@ namespace NW.FairyToon.Editor
             if (EditorGUI.EndChangeCheck())
             {
                 int mask = 0;
-                if (!Mathf.Approximately(direction.x, before.x)) { value.x = direction.x; mask |= 1; }
-                if (!Mathf.Approximately(direction.y, before.y)) { value.y = direction.y; mask |= 2; }
-                if (!Mathf.Approximately(direction.z, before.z)) { value.z = direction.z; mask |= 4; }
+                if (property.hasMixedValue || !Mathf.Approximately(direction.x, before.x)) { value.x = direction.x; mask |= 1; }
+                if (property.hasMixedValue || !Mathf.Approximately(direction.y, before.y)) { value.y = direction.y; mask |= 2; }
+                if (property.hasMixedValue || !Mathf.Approximately(direction.z, before.z)) { value.z = direction.z; mask |= 4; }
                 if (mask != 0) SetDissolveComponents(property, value, mask);
             }
             EditorGUI.showMixedValue = false;
