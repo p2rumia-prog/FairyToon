@@ -1052,7 +1052,7 @@ namespace NW.FairyToon.Editor
             Add("p:_RimBorder", "Border", "範囲", "边界");
             Add("p:_RimColor", "Color", "色", "纹理");
             Add("p:_RimColorTex", "Texture", "テクスチャ", "纹理");
-            Add("p:_RimDirRange", "Direction Range", "方向の範囲", "方向范围");
+            Add("p:_RimDirRange", "Direct light width", "方向の範囲", "方向范围");
             Add("p:_RimDirStrength", "Light direction strength", "ライト方向の強さ", "光线方向强度");
             Add("p:_RimEnableLighting", "Enable Lighting", "ライトの明るさを反映", "启用照明");
             Add("p:_RimFresnelPower", "Fresnel Power", "リムライトの細さ", "菲涅尔折射率");
@@ -1196,10 +1196,10 @@ namespace NW.FairyToon.Editor
             Add("ft.AlphaMaskInvert", "Invert", "反転", "反转");
             Add("ft.AlphaMaskTransparency", "Transparency", "透明度", "透明度");
             Add("ft.AlphaMaskAdvanced", "Show advanced editor", "詳細編集を表示", "显示高级编辑");
-            Add("ft.DissolveOff", "Off", "オフ", "关闭");
-            Add("ft.DissolveMask", "Texture Mask", "テクスチャマスク", "纹理遮罩");
+            Add("ft.DissolveOff", "None", "オフ", "关闭");
+            Add("ft.DissolveMask", "Alpha", "テクスチャマスク", "纹理遮罩");
             Add("ft.DissolveUV", "UV", "UV", "UV");
-            Add("ft.DissolveObject", "Object Position", "オブジェクト位置", "物体位置");
+            Add("ft.DissolveObject", "Position", "オブジェクト位置", "物体位置");
             Add("ft.DissolveRadial", "Radial", "放射", "径向");
             Add("ft.DissolveLinear", "Linear", "線形", "线性");
             Add("sColorAdjust", "Color Adjust", "色調補正", "色调校正");

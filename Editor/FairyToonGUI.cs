@@ -645,6 +645,7 @@ namespace NW.FairyToon.Editor
                 P("_Cutoff");
             P("_FlipNormal");
             P("_BackfaceColor");
+            ColorAlpha("_BackfaceColor");
             P("_AAStrength");
             EndSection();
         }
@@ -652,7 +653,9 @@ namespace NW.FairyToon.Editor
         private string MainColorLabel()
         {
             var mode = Prop("_TransparentMode");
-            bool alpha = (mode != null && mode.hasMixedValue) || PrimaryMode() != FairyToonMaterialSetup.Opaque;
+            int modeId = PrimaryMode();
+            if (modeId == FairyToonMaterialSetup.Gem || modeId == FairyToonMaterialSetup.Refraction) return "sColor";
+            bool alpha = (mode != null && mode.hasMixedValue) || modeId != FairyToonMaterialSetup.Opaque;
             return alpha ? "sColorAlpha" : "sColor";
         }
 
