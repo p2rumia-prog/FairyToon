@@ -112,8 +112,8 @@ namespace NW.FairyToon.Editor
             try
             {
                 group = BeginUndo(editor, undo);
-                FairyToonGUI.BeginMenuOperation(props, wrapped);
                 started = true;
+                FairyToonGUI.BeginMenuOperation(props, wrapped);
                 for (int i = 0; i < FairyToonPropertyBlocks.All.Length; i++)
                 {
                     FairyToonPropertyEntry entry = FairyToonPropertyBlocks.All[i];
@@ -149,8 +149,8 @@ namespace NW.FairyToon.Editor
             try
             {
                 group = BeginUndo(editor, "FairyToon Reset");
-                FairyToonGUI.BeginMenuOperation(props, wrapped);
                 started = true;
+                FairyToonGUI.BeginMenuOperation(props, wrapped);
                 for (int i = 0; i < props.Length; i++)
                 {
                     MaterialProperty prop = props[i];
@@ -186,8 +186,8 @@ namespace NW.FairyToon.Editor
             }
             finally
             {
-                Undo.CollapseUndoOperations(group);
-                FairyToonGUI.EndMenuOperation(null);
+                try { Undo.CollapseUndoOperations(group); }
+                finally { FairyToonGUI.EndMenuOperation(null); }
             }
         }
 

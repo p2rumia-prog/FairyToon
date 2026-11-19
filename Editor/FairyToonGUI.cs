@@ -2346,6 +2346,8 @@ namespace NW.FairyToon.Editor
             {
                 Rect row = EditorGUILayout.GetControlRect();
                 BeginScope(row, property);
+                try
+                {
                 EditorGUI.showMixedValue = property.hasMixedValue;
                 Rect label = row;
                 label.width = EditorGUIUtility.labelWidth;
@@ -2363,12 +2365,19 @@ namespace NW.FairyToon.Editor
                 }
                 if (mask != 0) SetDissolveComponents(property, value, mask);
                 EditorGUI.showMixedValue = false;
-                EndScope();
+                }
+                finally
+                {
+                    EditorGUI.showMixedValue = false;
+                    EndScope();
+                }
             }
             if (showRotate)
             {
                 Rect row = EditorGUILayout.GetControlRect();
                 BeginScope(row, property);
+                try
+                {
                 EditorGUI.showMixedValue = property.hasMixedValue;
                 EditorGUI.BeginChangeCheck();
                 float rotate = value.w / (Mathf.PI * 2f);
@@ -2380,7 +2389,12 @@ namespace NW.FairyToon.Editor
                     SetDissolveComponents(property, value, 8);
                 }
                 EditorGUI.showMixedValue = false;
-                EndScope();
+                }
+                finally
+                {
+                    EditorGUI.showMixedValue = false;
+                    EndScope();
+                }
             }
             if ((!Searching || LabelOnly("sReset")) && GUILayout.Button(FairyToonL10n.Text("sReset")))
                 SetDissolveComponents(property, Vector4.zero, 15);
@@ -2443,6 +2457,8 @@ namespace NW.FairyToon.Editor
             {
             Rect dirRow = EditorGUILayout.GetControlRect();
             BeginScope(dirRow, property);
+            try
+            {
             EditorGUI.showMixedValue = property.hasMixedValue;
             Rect label = dirRow;
             label.width = EditorGUIUtility.labelWidth;
@@ -2462,11 +2478,18 @@ namespace NW.FairyToon.Editor
             }
             if (mask != 0) SetDissolveComponents(property, value, mask);
             EditorGUI.showMixedValue = false;
-            EndScope();
+            }
+            finally
+            {
+                EditorGUI.showMixedValue = false;
+                EndScope();
+            }
             }
             if (!showLength) return;
             Rect lengthRow = EditorGUILayout.GetControlRect();
             BeginScope(lengthRow, property);
+            try
+            {
             EditorGUI.showMixedValue = property.hasMixedValue;
             EditorGUI.BeginChangeCheck();
             float length = EditorGUI.FloatField(lengthRow, FairyToonL10n.Text("sLength"), value.w);
@@ -2477,7 +2500,12 @@ namespace NW.FairyToon.Editor
                 SetDissolveComponents(property, value, 8);
             }
             EditorGUI.showMixedValue = false;
-            EndScope();
+            }
+            finally
+            {
+                EditorGUI.showMixedValue = false;
+                EndScope();
+            }
         }
 
         private void DrawZWrite()
@@ -3186,6 +3214,8 @@ namespace NW.FairyToon.Editor
         {
             Rect row = EditorGUILayout.GetControlRect();
             BeginScope(row, tex);
+            try
+            {
             bool mixed = TextureAxesDiffer(tex, scaleRow);
             float shownX = scaleRow ? st.x : st.z;
             float shownY = scaleRow ? st.y : st.w;
@@ -3248,7 +3278,12 @@ namespace NW.FairyToon.Editor
                 }
             }
             EditorGUI.showMixedValue = false;
-            EndScope();
+            }
+            finally
+            {
+                EditorGUI.showMixedValue = false;
+                EndScope();
+            }
         }
 
         private static bool TextureAxesDiffer(MaterialProperty tex, bool scale)
