@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Globalization;
 using System.Reflection;
 using UnityEditor;
 using UnityEngine;
@@ -32,17 +33,13 @@ namespace NW.FairyToon.Editor
             float hexBudget = room - swatchWidth;
             float usedGap = hexBudget > gap ? gap : 0f;
             float hexW = Mathf.Min(hexWidth, Mathf.Max(0f, hexBudget - usedGap));
-            if (hexW < 8f || swatchWidth < 8f)
+            if (room >= 2f && (hexW < 8f || swatchWidth < 8f))
             {
-                swatchWidth = Mathf.Clamp(room * 0.5f, room >= 2f ? 1f : 0f, Mathf.Min(swatch, room));
-                usedGap = room - swatchWidth > gap + 1f ? gap : 0f;
-                if (swatchWidth + usedGap >= room) usedGap = 0f;
-                hexW = Mathf.Max(room >= 2f ? 1f : 0f, room - swatchWidth - usedGap);
-                if (swatchWidth + hexW > room)
-                {
-                    swatchWidth = Mathf.Max(room >= 2f ? 1f : 0f, room - hexW);
-                    hexW = Mathf.Max(0f, room - swatchWidth);
-                }
+                usedGap = room >= 20f + gap + 8f ? gap : 0f;
+                swatchWidth = Mathf.Clamp(room - usedGap - 8f, 8f, Mathf.Min(swatch, room - 1f));
+                if (swatchWidth + usedGap >= room) { usedGap = 0f; swatchWidth = Mathf.Max(1f, room * 0.5f); }
+                hexW = Mathf.Max(1f, room - swatchWidth - usedGap);
+                if (swatchWidth < 1f) swatchWidth = Mathf.Min(room, 1f);
             }
             field = new Rect(x, y, swatchWidth, h);
             hexRect = new Rect(x + swatchWidth + usedGap, y, Mathf.Max(0f, Mathf.Min(hexW, limit - (x + swatchWidth + usedGap))), h);
@@ -132,6 +129,7 @@ namespace NW.FairyToon.Editor
         private static GUIStyle s_Box;
         private static GUIStyle s_Outer;
         private static GUIStyle s_OuterBeforeOutline;
+        private static GUIStyle s_OutlineBox;
         private static GUIStyle s_Inner;
         private static GUIStyle s_InnerHalf;
         private static GUIStyle s_InnerFull;
@@ -150,11 +148,12 @@ namespace NW.FairyToon.Editor
         private readonly Dictionary<string, bool> m_HdrWrap = new Dictionary<string, bool>();
         private FairyToonEditorMode m_LayoutMode = FairyToonEditorMode.Advanced;
         private bool m_LayoutModeReady;
+        private string m_LayoutQuery = "";
+        private bool m_HaveQuery;
+        private static string s_ActiveQuery = "";
         private readonly List<bool> m_Frames = new List<bool>();
         private static bool s_ProSkin;
         private static string s_Search = "";
-        private static string s_LayoutQuery = "";
-        private static bool s_QueryReady;
 
         private MaterialEditor m_Editor;
         private MaterialProperty[] m_Props;
@@ -189,10 +188,17 @@ namespace NW.FairyToon.Editor
             public Dictionary<string, Texture> Textures = new Dictionary<string, Texture>();
         }
 
-        private static readonly Stack<Dictionary<Object, MaterialShot>> s_MenuShots = new Stack<Dictionary<Object, MaterialShot>>();
-        private static readonly Stack<ValidationSnapshot> s_MenuValidation = new Stack<ValidationSnapshot>();
+        private struct MenuFrame
+        {
+            public int Id;
+            public ValidationSnapshot Validation;
+            public Dictionary<Object, MaterialShot> Assets;
+        }
 
-        internal static void CaptureMenuAssets(MaterialProperty[] props)
+        private static int s_MenuSerial;
+        private static readonly Stack<MenuFrame> s_MenuFrames = new Stack<MenuFrame>();
+
+        private static Dictionary<Object, MaterialShot> CaptureMenuAssets(MaterialProperty[] props)
         {
             var shot = new Dictionary<Object, MaterialShot>();
             if (props != null)
@@ -208,14 +214,14 @@ namespace NW.FairyToon.Editor
                     }
                 }
             }
-            s_MenuShots.Push(shot);
+            return shot;
         }
 
         // Called after the menu setters return, including Unity's default write when a callback returns false.
         internal static void CollectMenuAssetChanges()
         {
-            if (s_MenuShots.Count == 0) return;
-            Dictionary<Object, MaterialShot> shot = s_MenuShots.Pop();
+            if (s_MenuFrames.Count == 0) return;
+            Dictionary<Object, MaterialShot> shot = s_MenuFrames.Peek().Assets;
             var changed = new HashSet<Object>();
             foreach (KeyValuePair<Object, MaterialShot> pair in shot)
             {
@@ -270,7 +276,7 @@ namespace NW.FairyToon.Editor
                         break;
                     case ShaderPropertyType.Float:
                     case ShaderPropertyType.Range:
-                        text.Append(material.GetFloat(name).ToString("R"));
+                        text.Append(material.GetFloat(name).ToString("R", CultureInfo.InvariantCulture));
                         break;
                     case ShaderPropertyType.Int:
                         text.Append(material.GetInteger(name));
@@ -286,21 +292,32 @@ namespace NW.FairyToon.Editor
             return shot;
         }
 
+        private static void AppendBit(System.Text.StringBuilder text, float value, bool first)
+        {
+            if (!first) text.Append('|');
+            text.Append(value.ToString("R", CultureInfo.InvariantCulture));
+        }
+
         private static void AppendExact(System.Text.StringBuilder text, Color color)
         {
-            text.Append(color.r.ToString("R")).Append(',').Append(color.g.ToString("R")).Append(',')
-                .Append(color.b.ToString("R")).Append(',').Append(color.a.ToString("R"));
+            AppendBit(text, color.r, true);
+            AppendBit(text, color.g, false);
+            AppendBit(text, color.b, false);
+            AppendBit(text, color.a, false);
         }
 
         private static void AppendExact(System.Text.StringBuilder text, Vector4 value)
         {
-            text.Append(value.x.ToString("R")).Append(',').Append(value.y.ToString("R")).Append(',')
-                .Append(value.z.ToString("R")).Append(',').Append(value.w.ToString("R"));
+            AppendBit(text, value.x, true);
+            AppendBit(text, value.y, false);
+            AppendBit(text, value.z, false);
+            AppendBit(text, value.w, false);
         }
 
         private static void AppendExact(System.Text.StringBuilder text, Vector2 value)
         {
-            text.Append(value.x.ToString("R")).Append(',').Append(value.y.ToString("R"));
+            AppendBit(text, value.x, true);
+            AppendBit(text, value.y, false);
         }
 
         internal static void NoteCallbackResult(MaterialProperty property, bool handled)
@@ -416,6 +433,7 @@ namespace NW.FairyToon.Editor
             try
             {
                 InitStyles();
+                UseInspectorQuery();
                 FairyToonL10n.DrawLanguagePopup();
                 FairyToonL10n.DrawModeToolbar();
                 EditorGUILayout.Space(2f);
@@ -510,20 +528,36 @@ namespace NW.FairyToon.Editor
 
         // The gear menu runs after OnGUI restores the original callbacks. Wrap them again for that one action
         // so its setter validation uses the same per-material result as a field edit.
-        internal static void BeginMenuOperation(MaterialProperty[] props, List<SavedCallback> wrapped)
+        // Returns 0 when the frame was not pushed, so a throw during the snapshot cannot pop an outer frame.
+        internal static int BeginMenuOperation(MaterialProperty[] props, List<SavedCallback> wrapped)
         {
-            s_MenuValidation.Push(TakeValidationSnapshot());
-            ClearValidationScope();
-            s_MenuOperation = true;
-            CaptureMenuAssets(props);
-            if (props == null) return;
-            for (int i = 0; i < props.Length; i++) WrapCallback(props[i], wrapped);
+            var frame = new MenuFrame
+            {
+                Id = ++s_MenuSerial,
+                Validation = TakeValidationSnapshot(),
+                Assets = CaptureMenuAssets(props)
+            };
+            s_MenuFrames.Push(frame);
+            try
+            {
+                ClearValidationScope();
+                s_MenuOperation = true;
+                if (props != null)
+                    for (int i = 0; i < props.Length; i++) WrapCallback(props[i], wrapped);
+                return frame.Id;
+            }
+            catch
+            {
+                if (s_MenuFrames.Count > 0 && s_MenuFrames.Peek().Id == frame.Id) s_MenuFrames.Pop();
+                throw;
+            }
         }
 
-        internal static void EndMenuOperation(List<SavedCallback> wrapped)
+        internal static void EndMenuOperation(List<SavedCallback> wrapped, int frameId)
         {
             if (wrapped != null) RestoreCallbacks(wrapped);
-            if (s_MenuValidation.Count > 0) RestoreValidationSnapshot(s_MenuValidation.Pop());
+            if (frameId == 0 || s_MenuFrames.Count == 0 || s_MenuFrames.Peek().Id != frameId) return;
+            RestoreValidationSnapshot(s_MenuFrames.Pop().Validation);
         }
 
         private struct ValidationSnapshot
@@ -627,9 +661,10 @@ namespace NW.FairyToon.Editor
             s_Search = EditorGUILayout.TextField(s_Search, EditorStyles.toolbarSearchField);
             if (Event.current == null || Event.current.type == EventType.Layout)
             {
-                s_LayoutQuery = s_Search ?? "";
-                s_QueryReady = true;
+                m_LayoutQuery = s_Search ?? "";
+                m_HaveQuery = true;
             }
+            UseInspectorQuery();
             RenderingMode();
             EditorGUI.BeginChangeCheck();
             try
@@ -747,9 +782,15 @@ namespace NW.FairyToon.Editor
             return m_LayoutChoice.TryGetValue(key, out bool cached) && cached;
         }
 
-        // Row visibility uses the query captured on Layout, so a keystroke cannot add controls on Repaint.
-        private static string Query =>
-            s_QueryReady && Event.current != null && Event.current.type != EventType.Layout ? s_LayoutQuery : (s_Search ?? "");
+        // Each inspector keeps the query from its own Layout. The text field itself can stay shared.
+        private void UseInspectorQuery()
+        {
+            s_ActiveQuery = Event.current != null && Event.current.type != EventType.Layout && m_HaveQuery
+                ? m_LayoutQuery
+                : (s_Search ?? "");
+        }
+
+        private static string Query => s_ActiveQuery ?? "";
 
         private static bool Searching => !string.IsNullOrEmpty(Query);
 
@@ -887,18 +928,18 @@ namespace NW.FairyToon.Editor
             const string message = "If the material does not look right, set the CullMode to Off or Back.";
             float scale = Mathf.Max(1f, EditorGUIUtility.pixelsPerPoint);
             float height = 75f / scale;
-            float icon = 39f / scale;
+            float icon = 49f / scale;
             float buttonWidth = 86f / scale;
-            float buttonHeight = 18f;
+            float buttonHeight = 29f / scale;
             float pad = 8f / scale;
             Rect row = EditorGUILayout.GetControlRect(false, height);
             if (Event.current != null && Event.current.type == EventType.Repaint)
                 EditorStyles.helpBox.Draw(row, false, false, false, false);
-            Rect iconRect = new Rect(row.x + 6f, row.y + (row.height - icon) * 0.5f, icon, icon);
+            Rect iconRect = new Rect(row.x + 8f / scale, row.y + 12f / scale, icon, icon);
             GUIContent iconContent = EditorGUIUtility.IconContent("console.warnicon");
             if (iconContent.image != null && Event.current != null && Event.current.type == EventType.Repaint)
                 GUI.DrawTexture(iconRect, iconContent.image, ScaleMode.StretchToFill);
-            float rightInset = 13f / scale;
+            float rightInset = 14f / scale;
             Rect button = new Rect(row.xMax - rightInset - buttonWidth, row.yMax - pad - buttonHeight, buttonWidth, buttonHeight);
             var mini = new GUIStyle(EditorStyles.wordWrappedMiniLabel);
             Rect text = new Rect(iconRect.xMax + 4f, row.y + 4f, Mathf.Max(0f, button.x - iconRect.xMax - 8f), button.yMax - row.y - 6f);
@@ -1036,9 +1077,12 @@ namespace NW.FairyToon.Editor
                     bool invertChanged = false;
                     bool transparencyChanged = false;
                     bool blocked = AlphaPairBlocked(scale, offset);
+                    bool previewOwned = scale.applyPropertyCallback != null || offset.applyPropertyCallback != null;
                     if (blocked)
                         EditorGUILayout.HelpBox("Invert and Transparency stay unchanged while the selection is mixed or locked.", MessageType.Info);
-                    using (new EditorGUI.DisabledScope(blocked))
+                    else if (previewOwned)
+                        EditorGUILayout.HelpBox("Invert and Transparency cannot be edited while an animation preview owns them.", MessageType.Info);
+                    using (new EditorGUI.DisabledScope(blocked || previewOwned))
                     {
                     if (!Searching || HitIgnore(invertShown) || HitIgnore(scale.name))
                     {
@@ -1203,7 +1247,7 @@ namespace NW.FairyToon.Editor
             var decal = Prop(prefix + "TexIsDecal");
             if (decal == null || decal.hasMixedValue || Number(decal) <= 0.5f) ScaleOffset(prefix + "Tex");
             AngleSlider(prefix + "TexAngle");
-            ScrollAndRotate(prefix + "Tex_ScrollRotate");
+            ScrollAndRotate(prefix + "Tex_ScrollRotate", false);
             Separator();
             Tex(prefix + "BlendMask", null, "sMask");
             if (!EverySelectedIsGem()) DissolveControls(prefix + "Dissolve", false);
@@ -1516,8 +1560,8 @@ namespace NW.FairyToon.Editor
             if (!BeginSection("Shadow", "sShadowSetting", Prop("_UseShadow"), true, PropertyBlock.Shadow)) return;
             var maskType = Prop("_ShadowMaskType");
             P("_ShadowMaskType");
-            int type = maskType.hasMixedValue ? -1 : Mathf.RoundToInt(Number(maskType));
-            if (type == 2)
+            bool faceMask = LayoutChoice("shadow-mask-face", maskType != null && !maskType.hasMixedValue && Mathf.RoundToInt(Number(maskType)) == 2);
+            if (faceMask)
             {
                 Tex("_ShadowStrengthMask", "_ShadowStrength", "Face SDF");
                 Help("Face SDF in lilToon's format: R / G thresholds for light from either side, " +
@@ -1588,25 +1632,24 @@ namespace NW.FairyToon.Editor
             if (shadowLayers && shadowTail) Separator();
             P("_ShadowBorderColor");
             P("_ShadowBorderRange");
-            P("_ShadowEnvStrength");
+            if (!Searching || RowVisible("_ShadowBorderRange", "Border Range") || RowVisible("_ShadowEnvStrength", "Environment strength on shadow color"))
+                Separator();
+            P("_ShadowEnvStrength", "Environment strength on shadow color");
             P("_ShadowMainStrength");
             if (!Searching || HitIgnore("Blur Mask")) Separator();
             Tex("_ShadowBlurMask", null, "Blur Mask");
             if (!Searching || HitIgnore("AO")) Separator();
 
             string aoKey = PrefsPrefix + "Foldout.ShadowAO";
-            bool aoStored = EditorPrefs.GetBool(aoKey, false);
             bool aoNamed = Searching && (HitIgnore("1st Min") || HitIgnore("1st Max") || HitIgnore("2nd Min") || HitIgnore("2nd Max") || HitIgnore("3rd Min") || HitIgnore("3rd Max") || HitIgnore("AO Map"));
-            bool aoOpen = LayoutChoice(aoKey, aoStored || aoNamed);
+            bool aoOpen = FoldShown(aoKey, aoNamed);
+            EditorGUI.indentLevel++;
             bool drewAo = Tex("_ShadowBorderMask", null, "AO Map", null, aoNamed);
-            if (drewAo)
-            {
-                Rect aoRow = m_TextureRow;
-                bool nextAo = EditorGUI.Foldout(new Rect(aoRow.x + 1f, aoRow.y, 14f, aoRow.height), aoOpen, GUIContent.none, true);
-                if (nextAo != aoStored) EditorPrefs.SetBool(aoKey, nextAo);
-            }
+            if (drewAo) SaveFoldClick(aoKey, aoOpen, DrawFoldArrow(aoOpen));
+            EditorGUI.indentLevel--;
             if (aoOpen || aoNamed)
             {
+                EditorGUI.indentLevel++;
                 AoPair("_ShadowAOShift", 0, "1st Min", "1st Max");
                 AoPair("_ShadowAOShift", 2, "2nd Min", "2nd Max");
                 AoPair("_ShadowAOShift2", 0, "3rd Min", "3rd Max");
@@ -1614,6 +1657,7 @@ namespace NW.FairyToon.Editor
                 P("_SSAOStrength", "Ambient Strength");
                 P("_SSAOLitStrength", "Lit Strength");
                 Tex("_SSAOMask", null, "Mask (white = SSAO on)");
+                EditorGUI.indentLevel--;
             }
             EndSection();
         }
@@ -1625,19 +1669,47 @@ namespace NW.FairyToon.Editor
             bool showMin = !Searching || HitIgnore(minLabel) || HitIgnore(property.name);
             bool showMax = !Searching || HitIgnore(maxLabel) || HitIgnore(property.name);
             if (!showMin && !showMax) return;
-            Vector4 value = property.vectorValue;
-            AoEndpoints(value[start], value[start + 1], out float min, out float max);
+            Vector4 shown = FirstAoVector(property);
+            AoEndpoints(shown[start], shown[start + 1], out float min, out float max);
             float minNext = min;
             float maxNext = max;
             bool minChanged = showMin && DrawAoEndpoint(property, minLabel, min, out minNext);
             bool maxChanged = showMax && DrawAoEndpoint(property, maxLabel, max, out maxNext);
             if (!minChanged && !maxChanged) return;
-            if (!minChanged) minNext = min;
-            if (!maxChanged) maxNext = max;
-            AoScaleOffset(minNext, maxNext, out float scale, out float offset);
-            value[start] = scale;
-            value[start + 1] = offset;
-            SetDissolveComponents(property, value, (1 << start) | (1 << (start + 1)));
+            WriteAoEndpoints(property, start, minChanged, minNext, maxChanged, maxNext);
+        }
+
+        private static Vector4 FirstAoVector(MaterialProperty property)
+        {
+            if (property.targets != null)
+            {
+                for (int i = 0; i < property.targets.Length; i++)
+                {
+                    if (property.targets[i] is Material material && material.HasProperty(property.name))
+                        return material.GetVector(property.name);
+                }
+            }
+            return property.vectorValue;
+        }
+
+        private static void WriteAoEndpoints(MaterialProperty property, int start, bool minEdited, float newMin, bool maxEdited, float newMax)
+        {
+            if (property.targets == null) return;
+            Undo.RecordObjects(property.targets, "Shadow AO");
+            foreach (Object target in property.targets)
+            {
+                var material = target as Material;
+                if (material == null || !material.HasProperty(property.name)) continue;
+                Vector4 value = material.GetVector(property.name);
+                AoEndpoints(value[start], value[start + 1], out float min, out float max);
+                if (minEdited) min = newMin;
+                if (maxEdited) max = newMax;
+                if (max < min + 0.001f) max = min + 0.001f;
+                AoScaleOffset(min, max, out float scale, out float offset);
+                value[start] = scale;
+                value[start + 1] = offset;
+                material.SetVector(property.name, value);
+            }
         }
 
         // Shader applies saturate(sample * scale + offset). The fields are the sample values that map to 0 and 1.
@@ -1676,7 +1748,7 @@ namespace NW.FairyToon.Editor
                 EditorGUI.showMixedValue = property.hasMixedValue;
                 EditorGUI.BeginChangeCheck();
                 string text = Event.current != null && Event.current.alt ? property.name : label;
-                next = EditorGUI.FloatField(row, text, shown);
+                next = EditorGUI.Slider(row, text, shown, -0.01f, 1.01f);
                 return EditorGUI.EndChangeCheck();
             }
             finally
@@ -1697,24 +1769,22 @@ namespace NW.FairyToon.Editor
             var block = second ? PropertyBlock.Emission2nd : PropertyBlock.Emission1st;
             if (!BeginSection(prefs, title, Prop(second ? "_UseEmission2nd" : "_UseEmission"), false, block, false)) return;
             bool emissionUvSearch = Searching && (LabelOnly("ft.Tiling") || LabelOnly("ft.Offset") || LabelOnly("UV Mode") || LabelOnly("sScroll") || LabelOnly("sRotate") || LabelOnly("sAngle") || HitIgnore("Scroll") || HitIgnore("Angle") || HitIgnore("UV Setting") || HitIgnore("UV Animation") || ComponentHit(prefix + "Map_ScrollRotate"));
-            bool drewEmission = Tex(prefix + "Map", prefix + "Color", "Color", null, emissionUvSearch);
             string emissionUv = PrefsPrefix + "Foldout." + prefix + "UV";
-            bool emissionOpen = LayoutChoice(emissionUv, EditorPrefs.GetBool(emissionUv, false));
-            if (drewEmission)
-            {
-                Rect emissionRow = m_TextureRow;
-                bool nextEmission = EditorGUI.Foldout(new Rect(emissionRow.x + 1f, emissionRow.y, 14f, emissionRow.height), emissionOpen, GUIContent.none, true);
-                if (nextEmission != emissionOpen) EditorPrefs.SetBool(emissionUv, nextEmission);
-            }
+            bool emissionOpen = FoldShown(emissionUv, emissionUvSearch);
+            EditorGUI.indentLevel++;
+            bool drewEmission = Tex(prefix + "Map", prefix + "Color", "Color / Mask", null, emissionUvSearch);
+            if (drewEmission) SaveFoldClick(emissionUv, emissionOpen, DrawFoldArrow(emissionOpen));
+            EditorGUI.indentLevel--;
             if (emissionOpen || emissionUvSearch)
             {
+                EditorGUI.indentLevel++;
                 EditorGUILayout.LabelField("UV Setting", EditorStyles.boldLabel);
-                EditorGUI.indentLevel++;
                 ScaleOffset(prefix + "Map");
+                if (!Searching || LabelOnly("ft.Offset")) GUILayout.Space(2f);
                 ScrollAndRotate(prefix + "Map_ScrollRotate", true);
-                EditorGUI.indentLevel--;
+                if (!Searching || LabelOnly("sAngle") || HitIgnore("Angle")) GUILayout.Space(2f);
+                Separator();
                 EditorGUILayout.LabelField("UV Animation", EditorStyles.boldLabel);
-                EditorGUI.indentLevel++;
                 ScrollAndRotate(prefix + "Map_ScrollRotate", false);
                 P(prefix + "Map_UVMode", "UV Mode");
                 EditorGUI.indentLevel--;
@@ -1723,33 +1793,28 @@ namespace NW.FairyToon.Editor
             P(prefix + "MainStrength", "sStrengthFromMain");
             Separator();
             bool maskTiling = Searching && (LabelOnly("ft.Tiling") || LabelOnly("ft.Offset"));
-            bool drewMask = Tex(prefix + "BlendMask", prefix + "Blend", "sMask", null, maskTiling);
             string maskUv = PrefsPrefix + "Foldout." + prefix + "MaskUV";
-            bool maskOpen = LayoutChoice(maskUv, EditorPrefs.GetBool(maskUv, false));
-            if (drewMask)
-            {
-                Rect maskRow = m_TextureRow;
-                bool nextMask = EditorGUI.Foldout(new Rect(maskRow.x + 1f, maskRow.y, 14f, maskRow.height), maskOpen, GUIContent.none, true);
-                if (nextMask != maskOpen) EditorPrefs.SetBool(maskUv, nextMask);
-            }
-            if (maskOpen || maskTiling)
-                ScaleOffset(prefix + "BlendMask");
-            bool maskAnim = maskOpen || ComponentHit(prefix + "BlendMask_ScrollRotate");
-            if (maskAnim)
+            bool maskAnimHit = ComponentHit(prefix + "BlendMask_ScrollRotate");
+            bool maskOpen = FoldShown(maskUv, maskTiling || maskAnimHit);
+            EditorGUI.indentLevel++;
+            bool drewMask = Tex(prefix + "BlendMask", prefix + "Blend", "sMask", null, maskTiling || maskAnimHit);
+            if (drewMask) SaveFoldClick(maskUv, maskOpen, DrawFoldArrow(maskOpen));
+            if (maskOpen || maskTiling || maskAnimHit)
             {
                 EditorGUILayout.LabelField("UV Setting", EditorStyles.boldLabel);
-                EditorGUI.indentLevel++;
+                ScaleOffset(prefix + "BlendMask");
                 ScrollAndRotate(prefix + "BlendMask_ScrollRotate", true);
-                EditorGUI.indentLevel--;
+                Separator();
                 EditorGUILayout.LabelField("UV Animation", EditorStyles.boldLabel);
-                EditorGUI.indentLevel++;
                 ScrollAndRotate(prefix + "BlendMask_ScrollRotate", false);
-                EditorGUI.indentLevel--;
             }
+            EditorGUI.indentLevel--;
             P(prefix + "BlendMode", "sBlendMode");
-            P(prefix + "Blink", "Blink Strength / Hard / Speed / Phase");
+            BlinkVector(prefix + "Blink");
             P(prefix + "UseGrad", "Gradation");
-            if (Float(prefix + "UseGrad") > 0.5f || Prop(prefix + "UseGrad").hasMixedValue)
+            var gradProp = Prop(prefix + "UseGrad");
+            bool gradOpen = gradProp != null && LayoutChoice(prefix + "-grad", gradProp.hasMixedValue || Float(prefix + "UseGrad") > 0.5f);
+            if (gradOpen)
             {
                 Tex(prefix + "GradTex", null, "Gradation Texture");
                 P(prefix + "GradSpeed", "Gradation Speed");
@@ -1757,6 +1822,39 @@ namespace NW.FairyToon.Editor
             P(prefix + "Fluorescence", "Fluorescence");
 
             EndSection();
+        }
+
+        private void BlinkVector(string name)
+        {
+            var property = Prop(name);
+            if (property == null || property.propertyType != ShaderPropertyType.Vector) return;
+            string[] labels = { "Blink Strength", "Blink Hard", "Blink Speed", "Blink Phase" };
+            Vector4 value = property.vectorValue;
+            for (int component = 0; component < 4; component++)
+            {
+                if (Searching && !HitIgnore(labels[component]) && !HitIgnore(property.name) && !HitIgnore("Blink")) continue;
+                Rect row = EditorGUILayout.GetControlRect();
+                BeginScope(row, property);
+                try
+                {
+                    EditorGUI.showMixedValue = property.hasMixedValue;
+                    EditorGUI.BeginChangeCheck();
+                    float next = component < 2
+                        ? EditorGUI.Slider(row, labels[component], value[component], 0f, 1f)
+                        : EditorGUI.FloatField(row, labels[component], value[component]);
+                    if (EditorGUI.EndChangeCheck())
+                    {
+                        value = property.vectorValue;
+                        value[component] = next;
+                        SetDissolveComponents(property, value, 1 << component);
+                    }
+                }
+                finally
+                {
+                    EditorGUI.showMixedValue = false;
+                    EndScope();
+                }
+            }
         }
 
         private void Endfield()
@@ -1932,26 +2030,41 @@ namespace NW.FairyToon.Editor
         private void NormalMaps()
         {
 
-            bool firstNormal = SearchAllows("_UseBumpMap", "_BumpMap", "_BumpScale", "_BumpMap|Normal Map", "_Bump2ndMap|Normal Map", "_Bump2ndScale", "_Bump2ndScaleMask|Scale Mask", "|ft.Tiling", "|ft.Offset");
-            bool secondNormal = SearchAllows("_UseBump2ndMap", "_Bump2ndMap", "_Bump2ndScale", "_Bump2ndMap_UVMode", "_Bump2ndScaleMask", "|ft.Tiling", "|ft.Offset");
+            bool firstNormal = SearchAllows("_UseBumpMap", "_BumpMap", "_BumpScale", "_BumpMap|Normal Map", "|ft.Tiling", "|ft.Offset");
+            bool secondNormal = SearchAllows("_UseBump2ndMap", "_Bump2ndMap", "_Bump2ndScale", "_Bump2ndMap_UVMode", "_Bump2ndScaleMask", "_Bump2ndScaleMask|Mask & Strength", "|ft.Tiling", "|ft.Offset");
             if (!firstNormal && !secondNormal) return;
             if (firstNormal && BeginSection("Normal", "sNormalMapSetting", Prop("_UseBumpMap"), false, PropertyBlock.NormalMap1st, false))
             {
                 bool normalTiling = Searching && (LabelOnly("ft.Tiling") || LabelOnly("ft.Offset"));
-                Tex("_BumpMap", "_BumpScale", "Normal Map", null, normalTiling);
-                if (!Searching || normalTiling) ScaleOffset("_BumpMap");
+                string normalKey = PrefsPrefix + "Foldout.NormalUV";
+                bool normalOpen = FoldShown(normalKey, normalTiling, true);
+                EditorGUI.indentLevel++;
+                bool drewNormal = Tex("_BumpMap", "_BumpScale", "Normal Map", null, normalTiling);
+                if (drewNormal) SaveFoldClick(normalKey, normalOpen, DrawFoldArrow(normalOpen));
+                if (normalOpen || normalTiling) ScaleOffset("_BumpMap");
+                EditorGUI.indentLevel--;
                 EndSection();
             }
 
+            if (firstNormal && secondNormal) GUILayout.Space(2f);
             if (secondNormal && BeginSection("Normal2nd", "sNormalMap2nd", Prop("_UseBump2ndMap"), false, PropertyBlock.NormalMap2nd, false))
             {
             bool secondTiling = Searching && (LabelOnly("ft.Tiling") || LabelOnly("ft.Offset") || LabelOnly("UV Mode"));
-            Tex("_Bump2ndMap", "_Bump2ndScale", "Normal Map", null, secondTiling);
-            if (!Searching || secondTiling || RowVisible("_Bump2ndMap_UVMode", "UV Mode"))
-                P("_Bump2ndMap_UVMode");
-            if (!Searching || secondTiling) ScaleOffset("_Bump2ndMap");
-            Tex("_Bump2ndScaleMask", null, "Scale Mask", null, secondTiling);
+            string secondKey = PrefsPrefix + "Foldout.Normal2ndUV";
+            bool secondOpen = FoldShown(secondKey, secondTiling, true);
+            EditorGUI.indentLevel++;
+            bool drewSecond = Tex("_Bump2ndMap", "_Bump2ndScale", "Normal Map", null, secondTiling);
+            if (drewSecond) SaveFoldClick(secondKey, secondOpen, DrawFoldArrow(secondOpen));
+            if (secondOpen || secondTiling)
+            {
+                ScaleOffset("_Bump2ndMap");
+                if (!Searching || RowVisible("_Bump2ndMap_UVMode", "UV Mode") || LabelOnly("UV Mode"))
+                    P("_Bump2ndMap_UVMode");
+                Separator();
+            }
+            Tex("_Bump2ndScaleMask", null, "Mask & Strength", null, secondTiling);
             if (!Searching || secondTiling) ScaleOffset("_Bump2ndScaleMask");
+            EditorGUI.indentLevel--;
             EndSection();
             }
         }
@@ -2130,16 +2243,12 @@ namespace NW.FairyToon.Editor
         {
             string n = "_MatCap" + layer;
             bool matCapTiling = Searching && (LabelOnly("ft.Tiling") || LabelOnly("ft.Offset") || LabelOnly("sZRotCancel") || LabelOnly("sFixPerspective"));
-            bool drewMatCap = Tex(n + "Tex", n + "Color", "sMatCap", null, matCapTiling);
             string uvKey = PrefsPrefix + "Foldout.MatCapUV" + layer;
-            bool uvOpen = EditorPrefs.GetBool(uvKey, false);
-            if (drewMatCap)
-            {
-            Rect texRow = m_TextureRow;
-            bool nextUv = EditorGUI.Foldout(new Rect(texRow.x + 1f, texRow.y, 14f, texRow.height), uvOpen, GUIContent.none, true);
-            if (nextUv != uvOpen) EditorPrefs.SetBool(uvKey, nextUv);
-            uvOpen = nextUv;
-            }
+            bool uvOpen = FoldShown(uvKey, matCapTiling);
+            EditorGUI.indentLevel++;
+            bool drewMatCap = Tex(n + "Tex", n + "Color", "sMatCap", null, matCapTiling);
+            if (drewMatCap) SaveFoldClick(uvKey, uvOpen, DrawFoldArrow(uvOpen));
+            EditorGUI.indentLevel--;
             if (uvOpen || (Searching && (LabelOnly("ft.Tiling") || LabelOnly("ft.Offset") || LabelOnly("sZRotCancel") || LabelOnly("sFixPerspective"))))
             {
                 EditorGUI.indentLevel++;
@@ -2154,20 +2263,20 @@ namespace NW.FairyToon.Editor
             P(n + "NormalStrength", "sNormalStrength");
             Separator();
             bool maskTiling = Searching && (LabelOnly("ft.Tiling") || LabelOnly("ft.Offset"));
+            string maskKey = PrefsPrefix + "Foldout.MatCapMask" + layer;
+            bool maskOpen = FoldShown(maskKey, maskTiling);
+            EditorGUI.indentLevel++;
             bool drewMask = maskTiling
                 ? Tex(n + "BlendMask", n + "Blend", "sMask", null, true)
                 : Tex(n + "BlendMask", n + "Blend", "sMask");
-            string maskKey = PrefsPrefix + "Foldout.MatCapMask" + layer;
-            bool maskOpen = EditorPrefs.GetBool(maskKey, false);
-            if (drewMask)
-            {
-            Rect maskRow = m_TextureRow;
-            bool nextMask = EditorGUI.Foldout(new Rect(maskRow.x + 1f, maskRow.y, 14f, maskRow.height), maskOpen, GUIContent.none, true);
-            if (nextMask != maskOpen) EditorPrefs.SetBool(maskKey, nextMask);
-            maskOpen = nextMask;
-            }
+            if (drewMask) SaveFoldClick(maskKey, maskOpen, DrawFoldArrow(maskOpen));
+            EditorGUI.indentLevel--;
             if (maskOpen || maskTiling)
+            {
+                EditorGUI.indentLevel++;
                 ScaleOffset(n + "BlendMask");
+                EditorGUI.indentLevel--;
+            }
             P(n + "EnableLighting", "sEnableLighting");
             P(n + "ShadowMask", "sShadowMask");
             P(n + "BackfaceMask", "sBackfaceMask");
@@ -2176,19 +2285,17 @@ namespace NW.FairyToon.Editor
             if (ShowsApplyTransparency()) P(n + "ApplyTransparency", "sApplyTransparency");
             if (!Searching || LabelOnly("sCustomNormal")) Separator();
             P(n + "CustomNormal", "sCustomNormal");
-            if (Prop(n + "CustomNormal") != null && (Number(Prop(n + "CustomNormal")) > 0.5f || Prop(n + "CustomNormal").hasMixedValue))
+            var customNormal = Prop(n + "CustomNormal");
+            bool customOn = customNormal != null && LayoutChoice(n + "-custom", customNormal.hasMixedValue || Number(customNormal) > 0.5f);
+            if (customOn)
             {
                 bool normalTiling = Searching && (LabelOnly("ft.Tiling") || LabelOnly("ft.Offset"));
-                bool drewNormal = Tex(n + "BumpMap", n + "BumpScale", "sNormalMap", null, normalTiling);
                 string normalKey = PrefsPrefix + "Foldout.MatCapNormal" + layer;
-                bool normalOpen = EditorPrefs.GetBool(normalKey, false);
-                if (drewNormal)
-                {
-                    Rect normalRow = m_TextureRow;
-                    bool nextNormal = EditorGUI.Foldout(new Rect(normalRow.x + 1f, normalRow.y, 14f, normalRow.height), normalOpen, GUIContent.none, true);
-                    if (nextNormal != normalOpen) EditorPrefs.SetBool(normalKey, nextNormal);
-                    normalOpen = nextNormal;
-                }
+                bool normalOpen = FoldShown(normalKey, normalTiling);
+                EditorGUI.indentLevel++;
+                bool drewNormal = Tex(n + "BumpMap", n + "BumpScale", "sNormalMap", null, normalTiling);
+                if (drewNormal) SaveFoldClick(normalKey, normalOpen, DrawFoldArrow(normalOpen));
+                EditorGUI.indentLevel--;
                 if (normalOpen || (Searching && (LabelOnly("ft.Tiling") || LabelOnly("ft.Offset"))))
                     ScaleOffset(n + "BumpMap");
             }
@@ -2199,16 +2306,10 @@ namespace NW.FairyToon.Editor
             // lilToon indents the texture row, then folds Tiling/Offset from that same row.
             EditorGUI.indentLevel++;
             bool tiling = Searching && (LabelOnly("ft.Tiling") || LabelOnly("ft.Offset"));
-            bool drew = Tex("_RimColorTex", extra, label, "Color (RGB) and Transparency (A)", tiling);
             string key = PrefsPrefix + "Foldout.RimUV." + label;
-            bool open = EditorPrefs.GetBool(key, false);
-            if (drew)
-            {
-                Rect row = m_TextureRow;
-                bool next = EditorGUI.Foldout(new Rect(row.x + 1f, row.y, 14f, row.height), open, GUIContent.none, true);
-                if (next != open) EditorPrefs.SetBool(key, next);
-                open = next;
-            }
+            bool open = FoldShown(key, tiling);
+            bool drew = Tex("_RimColorTex", extra, label, "Color (RGB) and Transparency (A)", tiling);
+            if (drew) SaveFoldClick(key, open, DrawFoldArrow(open));
             if (open || tiling) ScaleOffset("_RimColorTex");
             EditorGUI.indentLevel--;
         }
@@ -2322,18 +2423,14 @@ namespace NW.FairyToon.Editor
             }
             if (toonOutline)
             {
-                bool drewOutline = Tex("_OutlineTex", "_OutlineColor", "sColor");
                 string outlineUv = PrefsPrefix + "Foldout.OutlineUV";
-                bool outlineOpen = EditorPrefs.GetBool(outlineUv, false);
-                if (drewOutline)
-                {
-                    Rect outlineRow = m_TextureRow;
-                    bool nextOutline = EditorGUI.Foldout(new Rect(outlineRow.x + 1f, outlineRow.y, 14f, outlineRow.height), outlineOpen, GUIContent.none, true);
-                    if (nextOutline != outlineOpen) EditorPrefs.SetBool(outlineUv, nextOutline);
-                    outlineOpen = nextOutline;
-                }
-                if (outlineOpen || (Searching && (LabelOnly("ft.Tiling") || LabelOnly("ft.Offset"))))
-                    ScaleOffset("_OutlineTex");
+                bool outlineForce = Searching && (LabelOnly("ft.Tiling") || LabelOnly("ft.Offset"));
+                bool outlineOpen = FoldShown(outlineUv, outlineForce);
+                EditorGUI.indentLevel++;
+                bool drewOutline = Tex("_OutlineTex", "_OutlineColor", "sColor");
+                if (drewOutline) SaveFoldClick(outlineUv, outlineOpen, DrawFoldArrow(outlineOpen));
+                if (outlineOpen || outlineForce) ScaleOffset("_OutlineTex");
+                EditorGUI.indentLevel--;
                 P("_OutlineEnableLighting", "sEnableLighting");
             }
             P("_OutlineMode", "Width Mode");
@@ -2616,7 +2713,7 @@ namespace NW.FairyToon.Editor
             if (queue)
             {
             outlineNext = LayoutChoice("outline-next", Prop("_OutlineCull") != null
-                && !fur
+                && !SelectedRenderingMode(FairyToonMaterialSetup.Fur)
                 && !SelectedRenderingMode(FairyToonMaterialSetup.Gem)
                 && (!Searching || RowVisible("_OutlineCull", "sCullMode")));
             if (outlineNext) m_BoxStyle = s_OuterBeforeOutline;
@@ -2660,33 +2757,30 @@ namespace NW.FairyToon.Editor
                 {
                     if (!Searching) Separator();
                     string furKey = PrefsPrefix + "Foldout.FurForward";
-                    bool furStored = EditorPrefs.GetBool(furKey, false);
-                    bool furOpen = LayoutChoice(furKey, furStored || Searching);
-                    bool nextFur = EditorGUILayout.Foldout(furOpen, "Forward", true);
-                    if (nextFur != furStored) EditorPrefs.SetBool(furKey, nextFur);
+                    bool furOpen = FoldShown(furKey, Searching && forward);
+                    var furLabel = new GUIStyle(EditorStyles.foldout) { fontStyle = FontStyle.Bold };
+                    bool nextFur = EditorGUILayout.Foldout(furOpen, "Forward", true, furLabel);
+                    SaveFoldClick(furKey, furOpen, nextFur);
                     if (furOpen)
                     {
                         EditorGUI.indentLevel++;
-                        using (new EditorGUI.DisabledScope(true))
-                        {
-                            P("_FurSrcBlend");
-                            P("_FurDstBlend");
-                            P("_FurSrcBlendAlpha");
-                            P("_FurDstBlendAlpha");
-                        }
+                        P("_FurSrcBlend");
+                        P("_FurDstBlend");
+                        P("_FurSrcBlendAlpha");
+                        P("_FurDstBlendAlpha");
                         EditorGUI.indentLevel--;
                     }
                 }
                 CloseBox();
             }
             // lilToon puts Outline Cull in its own box under Rendering. FairyToon has no separate outline ZTest or colour mask.
-            bool outline = Prop("_OutlineCull") != null
+            bool outline = LayoutChoice("outline-next", Prop("_OutlineCull") != null
                 && !SelectedRenderingMode(FairyToonMaterialSetup.Fur)
                 && !SelectedRenderingMode(FairyToonMaterialSetup.Gem)
-                && (!Searching || RowVisible("_OutlineCull", "sCullMode"));
+                && (!Searching || RowVisible("_OutlineCull", "sCullMode")));
             if (!outline) return;
-            // 3 pt of margin measures 4 px. Space() rounds a fraction of a point up to 2 px, so the extra pixel is its own rect.
-            if (outlineNext) PixelGap();
+            // 2 pt under Rendering is 3 px and 1 pt above Outline is 2 px, which is the measured 5 px gap.
+            if (outline) m_BoxStyle = s_OutlineBox;
             if (!OpenBox(FairyToonL10n.Text("sOutlineSetting"), null, null, true)) return;
             P("_OutlineCull", "sCullMode");
             CloseBox();
@@ -2695,15 +2789,6 @@ namespace NW.FairyToon.Editor
         // ---- Layout helpers ----
 
         // A queue equal to this shader's Queue tag is lilToon's From Shader, including an explicit copy of that number.
-        private static GUIStyle s_PixelGap;
-
-        private static void PixelGap()
-        {
-            if (s_PixelGap == null)
-                s_PixelGap = new GUIStyle { margin = new RectOffset(0, 0, 0, 0), padding = new RectOffset(0, 0, 0, 0) };
-            GUILayoutUtility.GetRect(0f, 1f / Mathf.Max(1f, EditorGUIUtility.pixelsPerPoint), s_PixelGap, GUILayout.ExpandWidth(true));
-        }
-
         private void DrawRenderQueue()
         {
             var materials = new List<Material>();
@@ -3069,8 +3154,8 @@ namespace NW.FairyToon.Editor
         {
             var property = Prop(name);
             if (property == null) return;
-            bool showScroll = anglePart != true && (!Searching || LabelOnly("sScroll") || (RowVisible(name, "sScroll") && !LabelOnly("sRotate") && !LabelOnly("sAngle")));
-            bool showRotate = anglePart != true && (!Searching || LabelOnly("sRotate") || (RowVisible(name, "sRotate") && !LabelOnly("sScroll") && !LabelOnly("sAngle")));
+            bool showScroll = anglePart != true && (!Searching || LabelOnly("sScroll") || HitIgnore("UV Animation") || HitIgnore(property.name + ".x") || HitIgnore(property.name + ".y") || (RowVisible(name, "sScroll") && !LabelOnly("sRotate") && !LabelOnly("sAngle")));
+            bool showRotate = anglePart != true && (!Searching || LabelOnly("sRotate") || HitIgnore("UV Animation") || HitIgnore(property.name + ".w") || (RowVisible(name, "sRotate") && !LabelOnly("sScroll") && !LabelOnly("sAngle")));
             bool showAngle = anglePart != false && (!Searching || LabelOnly("sAngle") || HitIgnore("Angle") || HitIgnore(property.name + ".z"));
             if (!showScroll && !showRotate && !showAngle) return;
             Vector4 value = property.vectorValue;
@@ -3097,11 +3182,6 @@ namespace NW.FairyToon.Editor
                     EditorGUI.showMixedValue = false;
                     EndScope();
                 }
-            }
-            if (anglePart == null && (showScroll || showRotate))
-            {
-                Separator();
-                EditorGUILayout.LabelField("UV Animation", EditorStyles.boldLabel);
             }
             if (showScroll)
             {
@@ -3674,6 +3754,8 @@ namespace NW.FairyToon.Editor
                     if (pair.Key == null || !pair.Key.HasProperty(prop.name)) continue;
                     if (Mathf.Approximately(pair.Key.GetFloat(prop.name), pair.Value)) continue;
                     pair.Key.SetFloat(prop.name, pair.Value);
+                    if (!Mathf.Approximately(pair.Key.GetFloat(prop.name), pair.Value))
+                        pair.Key.SetFloat(prop.name, pair.Value);
                 }
                 catch (Exception) { }
             }
@@ -4027,6 +4109,26 @@ namespace NW.FairyToon.Editor
             else m_Editor.TexturePropertySingleLine(content, tex, color);
         }
 
+        // The arrow sits one indent left of the thumbnail, which is inside the box rather than on the layout rect's outer edge.
+        private bool DrawFoldArrow(bool open)
+        {
+            Rect row = m_TextureRow;
+            Rect indented = EditorGUI.IndentedRect(row);
+            float x = indented.x - 15f;
+            return EditorGUI.Foldout(new Rect(x, row.y, 14f, row.height), open, GUIContent.none, true);
+        }
+
+        private bool FoldShown(string prefsKey, bool force, bool openByDefault = false)
+        {
+            bool stored = EditorPrefs.GetBool(prefsKey, openByDefault);
+            return LayoutChoice(prefsKey, stored || force);
+        }
+
+        private static void SaveFoldClick(string prefsKey, bool shown, bool next)
+        {
+            if (next != shown) EditorPrefs.SetBool(prefsKey, next);
+        }
+
         /// <summary>lilToon-style single line: texture slot plus its colour or value.</summary>
         private bool Tex(string texture, string extra, string label, string tooltip = null, bool force = false)
         {
@@ -4257,7 +4359,9 @@ namespace NW.FairyToon.Editor
             // made the bar 39 px. The 22-point title row is the whole bar, 33 px at 150%.
             s_Outer.padding = new RectOffset(2, 2, 0, 0);
             s_OuterBeforeOutline = new GUIStyle(s_Outer);
-            s_OuterBeforeOutline.margin = new RectOffset(4, 4, 0, 3);
+            s_OuterBeforeOutline.margin = new RectOffset(4, 4, 0, 2);
+            s_OutlineBox = new GUIStyle(s_Outer);
+            s_OutlineBox.margin = new RectOffset(4, 4, 1, 4);
             s_InnerHalf = BoxStyle(4, 2, 2, GuiBox("gui_box_inner_half_" + skin));
             s_InnerHalf.margin = new RectOffset(2, 2, 0, 2);
             s_InnerFull = BoxStyle(4, 2, 2, GuiBox("gui_box_inner_" + skin));

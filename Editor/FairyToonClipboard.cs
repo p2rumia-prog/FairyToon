@@ -107,13 +107,14 @@ namespace NW.FairyToon.Editor
             string undo = shouldCopyTex ? "FairyToon Paste (with textures)" : "FairyToon Paste";
             // One group for every property and every texture scale in this paste, recorded before the writes.
             int group = 0;
+            int menuFrame = 0;
             var wrapped = new List<FairyToonGUI.SavedCallback>();
             bool started = false;
             try
             {
                 group = BeginUndo(editor, undo);
                 started = true;
-                FairyToonGUI.BeginMenuOperation(props, wrapped);
+                menuFrame = FairyToonGUI.BeginMenuOperation(props, wrapped);
                 for (int i = 0; i < FairyToonPropertyBlocks.All.Length; i++)
                 {
                     FairyToonPropertyEntry entry = FairyToonPropertyBlocks.All[i];
@@ -134,7 +135,7 @@ namespace NW.FairyToon.Editor
             }
             finally
             {
-                if (started) FinishMenuOperation(editor, coverage, group, wrapped, callback);
+                if (started) FinishMenuOperation(editor, coverage, group, wrapped, callback, menuFrame);
             }
         }
 
@@ -144,13 +145,14 @@ namespace NW.FairyToon.Editor
             var coverage = SnapshotCoverage(editor);
             if (!ResetWouldChange(block, props, out bool callback)) return;
             int group = 0;
+            int menuFrame = 0;
             var wrapped = new List<FairyToonGUI.SavedCallback>();
             bool started = false;
             try
             {
                 group = BeginUndo(editor, "FairyToon Reset");
                 started = true;
-                FairyToonGUI.BeginMenuOperation(props, wrapped);
+                menuFrame = FairyToonGUI.BeginMenuOperation(props, wrapped);
                 for (int i = 0; i < props.Length; i++)
                 {
                     MaterialProperty prop = props[i];
@@ -160,13 +162,13 @@ namespace NW.FairyToon.Editor
             }
             finally
             {
-                if (started) FinishMenuOperation(editor, coverage, group, wrapped, callback);
+                if (started) FinishMenuOperation(editor, coverage, group, wrapped, callback, menuFrame);
             }
         }
 
         // Restores callbacks, syncs materials that actually changed, collapses the undo group,
         // and clears the menu scope even when a setter throws.
-        private static void FinishMenuOperation(MaterialEditor editor, List<CoverageSnapshot> coverage, int group, List<FairyToonGUI.SavedCallback> wrapped, bool callback)
+        private static void FinishMenuOperation(MaterialEditor editor, List<CoverageSnapshot> coverage, int group, List<FairyToonGUI.SavedCallback> wrapped, bool callback, int menuFrame)
         {
             try
             {
@@ -188,7 +190,7 @@ namespace NW.FairyToon.Editor
             finally
             {
                 try { Undo.CollapseUndoOperations(group); }
-                finally { FairyToonGUI.EndMenuOperation(null); }
+                finally { FairyToonGUI.EndMenuOperation(null, menuFrame); }
             }
         }
 

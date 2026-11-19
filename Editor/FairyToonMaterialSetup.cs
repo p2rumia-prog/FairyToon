@@ -158,6 +158,12 @@ namespace NW.FairyToon.Editor
             bool cutout = furMode == FurCutout;
             if (material.HasProperty("_FurZWrite")) material.SetFloat("_FurZWrite", cutout ? 1f : 0f);
             if (material.HasProperty("_FurAlphaToMask")) material.SetFloat("_FurAlphaToMask", cutout ? 1f : 0f);
+            if (material.HasProperty("_FurSrcBlend"))
+                material.SetInt("_FurSrcBlend", furMode == FurTransparent ? (int)BlendMode.SrcAlpha : (int)BlendMode.One);
+            if (material.HasProperty("_FurDstBlend"))
+                material.SetInt("_FurDstBlend", furMode == FurTransparent ? (int)BlendMode.OneMinusSrcAlpha : (int)BlendMode.Zero);
+            if (material.HasProperty("_FurSrcBlendAlpha")) material.SetInt("_FurSrcBlendAlpha", (int)BlendMode.One);
+            if (material.HasProperty("_FurDstBlendAlpha")) material.SetInt("_FurDstBlendAlpha", (int)BlendMode.OneMinusSrcAlpha);
         }
 
         public static void Apply(Material material)
@@ -227,11 +233,6 @@ namespace NW.FairyToon.Editor
                 material.SetInt("_DstBlendAlpha", (int)BlendMode.OneMinusSrcAlpha);
                 material.SetInt("_ZWrite", 1);
                 material.SetInt("_AlphaToMask", furMode == FurCutout ? 1 : 0);
-                // The remaining imported Fur render settings stay editable.
-                material.SetInt("_FurSrcBlend", furMode == FurTransparent ? (int)BlendMode.SrcAlpha : (int)BlendMode.One);
-                material.SetInt("_FurDstBlend", furMode == FurTransparent ? (int)BlendMode.OneMinusSrcAlpha : (int)BlendMode.Zero);
-                material.SetInt("_FurSrcBlendAlpha", (int)BlendMode.One);
-                material.SetInt("_FurDstBlendAlpha", (int)BlendMode.OneMinusSrcAlpha);
             }
             // (transparent surfaces stay out of the depth prepass, SSAO normals and object motion)
             bool depthPasses = fur || mode != Transparent;

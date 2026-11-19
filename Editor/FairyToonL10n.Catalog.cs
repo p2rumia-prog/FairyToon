@@ -75,7 +75,7 @@ namespace NW.FairyToon.Editor
             Add("sApplyTransparency", "Apply Transparency", "透明度を適用", "应用透明度");
             Add("sCustomNormal", "Custom normal map", "カスタム法線マップ", "自定义法线贴图");
             Add("sNormalMap", "Normal Map", "ノーマルマップ", "法线贴图");
-            Add("sZRotCancel", "Cancel Z-axis rotation", "Z軸回転をキャンセル", "取消 Z 轴旋转");
+            Add("sZRotCancel", "Z-axis rotation cancellation", "Z軸回転をキャンセル", "取消 Z 轴旋转");
             Add("sFixPerspective", "Fix Perspective", "パース補正", "透视校正");
             Add("sColor", "Color", "色", "纹理");
             Add("sColorFromMain", "Get color from Main", "メインカラーから色を取得", "从主色获取纹理");
