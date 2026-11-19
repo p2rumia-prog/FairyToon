@@ -97,7 +97,6 @@ namespace NW.FairyToon.Editor
         private static GUIStyle s_Custom;
         private static GUIStyle s_Foldout;
         private static GUIStyle s_Gear;
-        private static Texture2D s_InnerTex;
         private static Color s_Line;
         private bool m_AlphaMaskAdvanced;
         private int m_InnerDepth;
@@ -3271,24 +3270,14 @@ namespace NW.FairyToon.Editor
             }
             s_HeaderLabel = new GUIStyle(EditorStyles.label) { alignment = TextAnchor.MiddleLeft, fontStyle = FontStyle.Normal };
             s_HeaderLabel.normal.textColor = s_Foldout.normal.textColor;
-            if (s_InnerTex != null) UnityEngine.Object.DestroyImmediate(s_InnerTex);
             // Section boxes use lilToon's 12px GUI textures and InitializeBox metrics. The header gap stays Space(2).
-            Color content = s_ProSkin ? new Color32(57, 56, 57, 255) : new Color32(232, 232, 232, 255);
             s_Line = s_ProSkin ? new Color(0.35f, 0.35f, 0.35f, 1f) : new Color(0.4f, 0.4f, 0.4f, 1f);
-            s_InnerTex = Rounded(content);
             string skin = s_ProSkin ? "dark" : "light";
             s_Outer = BoxStyle(4, 4, 2, GuiBox("gui_box_outer_" + skin));
             s_Outer.margin.top = 0;
             s_InnerHalf = BoxStyle(4, 2, 2, GuiBox("gui_box_inner_half_" + skin));
             s_InnerFull = BoxStyle(4, 2, 2, GuiBox("gui_box_inner_" + skin));
-            s_Custom = new GUIStyle
-            {
-                border = new RectOffset(6, 6, 6, 6),
-                margin = new RectOffset(4, 4, 4, 4),
-                padding = new RectOffset(4, 4, 4, 4),
-                overflow = new RectOffset(0, 0, 0, 0)
-            };
-            s_Custom.normal.background = s_InnerTex;
+            s_Custom = BoxStyle(6, 4, 4, GuiBox("gui_custom_box_" + skin));
             s_Inner = s_InnerHalf;
             s_Box = s_Outer;
             s_Gear = new GUIStyle(GUIStyle.none) { alignment = TextAnchor.MiddleCenter };
@@ -3322,29 +3311,5 @@ namespace NW.FairyToon.Editor
             return null;
         }
 
-        private static Texture2D Rounded(Color color)
-        {
-            const int size = 16;
-            const int radius = 5;
-            var texture = new Texture2D(size, size, TextureFormat.RGBA32, false)
-            {
-                hideFlags = HideFlags.HideAndDontSave,
-                wrapMode = TextureWrapMode.Clamp
-            };
-            var pixels = new Color[size * size];
-            for (int y = 0; y < size; y++)
-            for (int x = 0; x < size; x++)
-            {
-                float dx = x < radius ? radius - x - 0.5f : x >= size - radius ? x - (size - radius) + 0.5f : 0f;
-                float dy = y < radius ? radius - y - 0.5f : y >= size - radius ? y - (size - radius) + 0.5f : 0f;
-                float cover = Mathf.Clamp01(radius - Mathf.Sqrt(dx * dx + dy * dy));
-                var pixel = color;
-                pixel.a *= cover;
-                pixels[y * size + x] = pixel;
-            }
-            texture.SetPixels(pixels);
-            texture.Apply();
-            return texture;
-        }
     }
 }

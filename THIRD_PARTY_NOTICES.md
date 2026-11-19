@@ -17,7 +17,7 @@ Adapted in this package:
 - `Editor/FairyToonClipboard.cs` (accumulating `CopiedProperties` / `CopiedVectorProperties`, Copy, Paste, Paste with texture, Reset)
 - `Editor/FairyToonGUI.cs` (Advanced / Preset / Shader Setting toolbar, row search, Shuriken foldout header, parent and child gears, localized enum options, section order, and the outer/inner box layout from `lilEditorGUI.InitializeBox` and `InitializeGUIStyles`)
 
-`Editor/Resources/gui_box_*.png` and `gui_custom_box_*.png` are the lilToon 2.4.1 GUI textures, copied under the MIT license above. The inspector uses them with the same `InitializeBox` border, margin and padding as `lilEditorGUI`. The untitled Base box still uses a generated fill until its own change.
+`Editor/Resources/gui_box_*.png` and `gui_custom_box_*.png` are the lilToon 2.4.1 GUI textures, copied under the MIT license above. The inspector uses them with the same `InitializeBox` border, margin and padding as `lilEditorGUI`. The untitled Base box uses `gui_custom_box`.
 
 The license text below is the `LICENSE` file at that commit.
 
