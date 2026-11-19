@@ -1109,6 +1109,7 @@ namespace NW.FairyToon.Editor
             Add("ft.DissolveObject", "Object Position", "オブジェクト位置", "物体位置");
             Add("ft.DissolveRadial", "Radial", "放射", "径向");
             Add("ft.DissolveLinear", "Linear", "線形", "线性");
+            Add("sColorAdjust", "Color Adjust", "色調補正", "色调校正");
             Add("Off", "Off", "Off (両面を描画)", "关闭");
             Add("Front", "Front", "Front (裏面のみ描画)", "正面");
             Add("Back", "Back", "Back (前面のみ描画)", "背面");
@@ -1171,6 +1172,35 @@ namespace NW.FairyToon.Editor
             Add("Invert", "Invert", "反転", "反转");
             Add("IncrementWrap", "IncrementWrap", "加算（ラップ）", "环绕加一");
             Add("DecrementWrap", "DecrementWrap", "減算（ラップ）", "环绕减一");
+            Add("LogicalClear", "LogicalClear", "論理クリア", "逻辑清除");
+            Add("LogicalSet", "LogicalSet", "論理セット", "逻辑置位");
+            Add("LogicalCopy", "LogicalCopy", "論理コピー", "逻辑复制");
+            Add("LogicalCopyInverted", "LogicalCopyInverted", "論理コピー反転", "逻辑复制取反");
+            Add("LogicalNoop", "LogicalNoop", "論理ノーオペ", "逻辑空操作");
+            Add("LogicalInvert", "LogicalInvert", "論理反転", "逻辑取反");
+            Add("LogicalAnd", "LogicalAnd", "論理積", "逻辑与");
+            Add("LogicalNand", "LogicalNand", "論理NAND", "逻辑与非");
+            Add("LogicalOr", "LogicalOr", "論理和", "逻辑或");
+            Add("LogicalNor", "LogicalNor", "論理NOR", "逻辑或非");
+            Add("LogicalXor", "LogicalXor", "論理XOR", "逻辑异或");
+            Add("LogicalEquivalence", "LogicalEquivalence", "論理等価", "逻辑等价");
+            Add("LogicalAndReverse", "LogicalAndReverse", "論理積（逆）", "逻辑与反");
+            Add("LogicalAndInverted", "LogicalAndInverted", "論理積（反転）", "逻辑反与");
+            Add("LogicalOrReverse", "LogicalOrReverse", "論理和（逆）", "逻辑或反");
+            Add("LogicalOrInverted", "LogicalOrInverted", "論理和（反転）", "逻辑反或");
+            Add("Overlay", "Overlay", "オーバーレイ", "叠加");
+            Add("Darken", "Darken", "比較（暗）", "变暗");
+            Add("Lighten", "Lighten", "比較（明）", "变亮");
+            Add("ColorDodge", "ColorDodge", "カラー比較（明）", "颜色减淡");
+            Add("ColorBurn", "ColorBurn", "カラー比較（暗）", "颜色加深");
+            Add("HardLight", "HardLight", "ハードライト", "强光");
+            Add("SoftLight", "SoftLight", "ソフトライト", "柔光");
+            Add("Difference", "Difference", "差の絶対値", "差值");
+            Add("Exclusion", "Exclusion", "除外", "排除");
+            Add("HSLHue", "HSLHue", "HSL 色相", "HSL 色相");
+            Add("HSLSaturation", "HSLSaturation", "HSL 彩度", "HSL 饱和度");
+            Add("HSLColor", "HSLColor", "HSL カラー", "HSL 颜色");
+            Add("HSLLuminosity", "HSLLuminosity", "HSL 輝度", "HSL 明度");
         }
 
         private static void Add(string key, string english, string japanese, string chinese)

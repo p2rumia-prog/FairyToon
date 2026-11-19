@@ -26,7 +26,7 @@ for (const line of shaderText.split('\n')) {
   const parts = raw.split(',').map(s => s.trim());
   for (let i = 0; i < parts.length; i += 2) if (parts[i]) enumNames.add(parts[i]);
 }
-for (const name of ['Off', 'Front', 'Back', 'Zero', 'One', 'DstColor', 'SrcColor', 'OneMinusDstColor', 'SrcAlpha', 'OneMinusSrcColor', 'DstAlpha', 'OneMinusDstAlpha', 'SrcAlphaSaturate', 'OneMinusSrcAlpha', 'Add', 'Subtract', 'ReverseSubtract', 'Min', 'Max', 'Disabled', 'Never', 'Less', 'Equal', 'LessEqual', 'Greater', 'NotEqual', 'GreaterEqual', 'Always', 'Keep', 'Replace', 'IncrementSaturate', 'DecrementSaturate', 'Invert', 'IncrementWrap', 'DecrementWrap'])
+for (const name of ['Off', 'Front', 'Back', 'Zero', 'One', 'DstColor', 'SrcColor', 'OneMinusDstColor', 'SrcAlpha', 'OneMinusSrcColor', 'DstAlpha', 'OneMinusDstAlpha', 'SrcAlphaSaturate', 'OneMinusSrcAlpha', 'Add', 'Subtract', 'ReverseSubtract', 'Min', 'Max', 'LogicalClear', 'LogicalSet', 'LogicalCopy', 'LogicalCopyInverted', 'LogicalNoop', 'LogicalInvert', 'LogicalAnd', 'LogicalNand', 'LogicalOr', 'LogicalNor', 'LogicalXor', 'LogicalEquivalence', 'LogicalAndReverse', 'LogicalAndInverted', 'LogicalOrReverse', 'LogicalOrInverted', 'Multiply', 'Screen', 'Overlay', 'Darken', 'Lighten', 'ColorDodge', 'ColorBurn', 'HardLight', 'SoftLight', 'Difference', 'Exclusion', 'HSLHue', 'HSLSaturation', 'HSLColor', 'HSLLuminosity', 'Disabled', 'Never', 'Less', 'Equal', 'LessEqual', 'Greater', 'NotEqual', 'GreaterEqual', 'Always', 'Keep', 'Replace', 'IncrementSaturate', 'DecrementSaturate', 'Invert', 'IncrementWrap', 'DecrementWrap'])
   enumNames.add(name);
 
 let integers = 0;

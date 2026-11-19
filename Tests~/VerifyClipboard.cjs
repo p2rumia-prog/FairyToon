@@ -50,6 +50,20 @@ if (!clipCs.includes('AnimationMode.InAnimationMode()'))
   errors.push('animation recording must skip the asset Apply');
 if (!clipCs.includes('hasMixedValue') || !clipCs.includes('dest.floatValue != source.floatValue'))
   errors.push('same-value paste must compare the stored value and still run when the selection is mixed');
+const writes = [
+  'dest.colorValue = source.colorValue',
+  'dest.vectorValue = source.vectorValue',
+  'dest.floatValue = source.floatValue',
+  'dest.intValue = source.intValue',
+  'dest.textureValue = source.textureValue',
+  'material.SetVector(st, scale)',
+];
+for (const line of writes)
+  if (!clipCs.includes(line)) errors.push('clipboard no longer writes ' + line);
+if (!clipCs.includes('Undo.IncrementCurrentGroup()'))
+  errors.push('paste undo must start its own group');
+if (pasteFn.includes('if (!direct || !entry.IsTexture'))
+  errors.push('texture scale must still be written when a callback owns the property');
 if (resetFn.indexOf('ResetWouldChange') < 0 || resetFn.indexOf('ResetWouldChange') > resetFn.indexOf('BeginUndo'))
   errors.push('Reset must return before recording undo when every value is already the default');
 
@@ -164,8 +178,8 @@ const normals = method('NormalMaps');
 if (normals.indexOf('secondNormal && BeginSection') < 0 || normals.indexOf('firstNormal && BeginSection') < 0)
   errors.push('normal 1st and 2nd need separate search gates');
 if (method('MainColorFirst').includes('BeginSection(')) errors.push('Main Color 1st is a label and gear, not an extra foldout');
-if (!method('DrawLocalizedEnum').includes('BeginProperty') || !method('DrawLocalizedEnum').includes('EndProperty'))
-  errors.push('localized enums must keep the material property context');
+if (!method('DrawLocalizedEnum').includes('BeginScope') || !method('DrawLocalizedEnum').includes('EndScope'))
+  errors.push('localized enums must keep the material property and animation context');
 
 if (errors.length) {
   console.error(errors.join('\n'));

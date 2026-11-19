@@ -107,6 +107,9 @@ namespace NW.FairyToon.Editor
             string undo = shouldCopyTex ? "FairyToon Paste (with textures)" : "FairyToon Paste";
             bool direct = !callback && !AnimationMode.InAnimationMode();
             int group = direct ? BeginUndo(editor, undo) : 0;
+            if (!direct) FairyToonGUI.SuppressValidation();
+            try
+            {
             for (int i = 0; i < FairyToonPropertyBlocks.All.Length; i++)
             {
                 FairyToonPropertyEntry entry = FairyToonPropertyBlocks.All[i];
@@ -115,10 +118,15 @@ namespace NW.FairyToon.Editor
                 if (!CopiedProperties.TryGetValue(entry.Name, out MaterialProperty source) || source == null) continue;
                 MaterialProperty dest = Find(props, entry.Name);
                 if (dest != null && ChangesValue(dest, source)) ApplyValue(dest, source);
-                if (!direct || !entry.IsTexture || !shouldCopyTex) continue;
+                if (!entry.IsTexture || !shouldCopyTex) continue;
                 string st = entry.Name + "_ST";
                 if (CopiedVectorProperties.TryGetValue(st, out Vector4 scale) && material.HasProperty(st) && material.GetVector(st) != scale)
                     material.SetVector(st, scale);
+            }
+            }
+            finally
+            {
+                if (!direct) FairyToonGUI.ResumeValidation();
             }
             if (!direct) return;
             MigrateCoverage(coverage);
@@ -133,11 +141,19 @@ namespace NW.FairyToon.Editor
             if (!ResetWouldChange(block, props, out bool callback)) return;
             bool direct = !callback && !AnimationMode.InAnimationMode();
             int group = direct ? BeginUndo(editor, "FairyToon Reset") : 0;
+            if (!direct) FairyToonGUI.SuppressValidation();
+            try
+            {
             for (int i = 0; i < props.Length; i++)
             {
                 MaterialProperty prop = props[i];
                 if (!ResetTarget(prop, block, out Shader shader, out int index) || AlreadyDefault(prop, shader, index)) continue;
                 ApplyDefault(prop, shader, index);
+            }
+            }
+            finally
+            {
+                if (!direct) FairyToonGUI.ResumeValidation();
             }
             if (!direct) return;
             MigrateCoverage(coverage);
@@ -331,8 +347,10 @@ namespace NW.FairyToon.Editor
 
         private static int BeginUndo(MaterialEditor editor, string undo)
         {
-            Undo.SetCurrentGroupName(undo);
+            // A new group, so this paste does not collapse into whatever the inspector already has open.
+            Undo.IncrementCurrentGroup();
             int group = Undo.GetCurrentGroup();
+            Undo.SetCurrentGroupName(undo);
             Undo.RecordObjects(editor.targets, undo);
             return group;
         }
