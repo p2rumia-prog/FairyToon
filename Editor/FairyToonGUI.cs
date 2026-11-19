@@ -2768,39 +2768,43 @@ namespace NW.FairyToon.Editor
             if (scale.targets == null) return;
             float previousScale = Number(scale);
             float previousOffset = Number(offset);
+            bool anyLocked = false;
+            foreach (Object target in scale.targets)
+            {
+                var material = target as Material;
+                if (material == null) continue;
+                if ((wantScale && Locked(material, scale.name)) || (wantOffset && Locked(material, offset.name)))
+                    anyLocked = true;
+            }
+            // One callback writes every selected material. Use it only when the pair is uniform and unlocked.
+            bool shareCallback = !anyLocked && !scale.hasMixedValue && !offset.hasMixedValue;
             Undo.IncrementCurrentGroup();
             int group = Undo.GetCurrentGroup();
             Exception failure = null;
             try
             {
-                bool scaleHandled = false;
-                bool offsetHandled = false;
-                try
+                OfferResult scaleResult = OfferResult.Unchanged;
+                OfferResult offsetResult = OfferResult.Unchanged;
+                if (shareCallback)
                 {
-                    if (wantScale) scaleHandled = OfferFloat(scale, callbackScale);
-                    if (wantOffset) offsetHandled = OfferFloat(offset, callbackOffset);
+                    if (wantScale) scaleResult = OfferFloat(scale, callbackScale, out failure);
+                    if (failure == null && wantOffset) offsetResult = OfferFloat(offset, callbackOffset, out failure);
                 }
-                catch (Exception ex)
+                bool threw = scaleResult == OfferResult.Threw || offsetResult == OfferResult.Threw;
+                bool refused = scaleResult == OfferResult.Refused || offsetResult == OfferResult.Refused;
+                bool accepted = scaleResult == OfferResult.Accepted || offsetResult == OfferResult.Accepted;
+                if (threw || refused)
                 {
-                    failure = ex;
+                    // A thrown callback may already have changed the side whose result is not Accepted.
+                    RestoreFloat(scale, previousScale);
+                    RestoreFloat(offset, previousOffset);
                 }
-                bool paired = failure == null && (!wantScale || scaleHandled) && (!wantOffset || offsetHandled);
-                bool restored = true;
-                if (!paired)
+                if (threw)
                 {
-                    try
-                    {
-                        if (scaleHandled && !OfferFloat(scale, previousScale)) restored = false;
-                        if (offsetHandled && !OfferFloat(offset, previousOffset)) restored = false;
-                    }
-                    catch (Exception ex)
-                    {
-                        restored = false;
-                        if (failure == null) failure = ex;
-                    }
+                    if (failure != null) throw failure;
+                    return;
                 }
-                if (failure != null) throw failure;
-                if (paired || !restored) return;
+                if (shareCallback && accepted && !refused) return;
                 foreach (Object target in scale.targets)
                 {
                     var material = target as Material;
@@ -2827,9 +2831,14 @@ namespace NW.FairyToon.Editor
             finally { Undo.CollapseUndoOperations(group); }
         }
 
-        private static bool OfferFloat(MaterialProperty prop, float value)
+        private enum OfferResult { NoCallback, Unchanged, Accepted, Refused, Threw }
+
+        private static OfferResult OfferFloat(MaterialProperty prop, float value, out Exception failure)
         {
-            if (prop.applyPropertyCallback == null) return false;
+            failure = null;
+            if (prop.applyPropertyCallback == null) return OfferResult.NoCallback;
+            // The setter returns before the callback when the value already matches and is not mixed.
+            if (!prop.hasMixedValue && Mathf.Approximately(Number(prop), value)) return OfferResult.Unchanged;
             bool handled = false;
             MaterialProperty.ApplyPropertyCallback original = prop.applyPropertyCallback;
             s_ProbeDepth++;
@@ -2839,12 +2848,27 @@ namespace NW.FairyToon.Editor
                 return true;
             };
             try { SetNumber(prop, value); }
+            catch (Exception ex)
+            {
+                failure = ex;
+                return OfferResult.Threw;
+            }
             finally
             {
                 prop.applyPropertyCallback = original;
                 s_ProbeDepth--;
             }
-            return handled;
+            return handled ? OfferResult.Accepted : OfferResult.Refused;
+        }
+
+        private static void RestoreFloat(MaterialProperty prop, float value)
+        {
+            if (prop.applyPropertyCallback == null)
+            {
+                if (!Mathf.Approximately(Number(prop), value)) SetNumber(prop, value);
+                return;
+            }
+            OfferFloat(prop, value, out _);
         }
 
         private void ColorAlpha(string name)
