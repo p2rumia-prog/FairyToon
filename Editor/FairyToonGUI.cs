@@ -1942,7 +1942,7 @@ namespace NW.FairyToon.Editor
             EditorGUILayout.BeginVertical(s_Box);
             Rect rect = GUILayoutUtility.GetRect(16f, 18f, GUILayout.ExpandWidth(true));
             Rect gear = new Rect(rect.xMax - 22f, rect.y, 20f, rect.height);
-            GUI.Label(new Rect(rect.x, rect.y, Mathf.Max(0f, gear.x - rect.x - 2f), rect.height), FairyToonL10n.Text(titleKey), EditorStyles.boldLabel);
+            GUI.Label(new Rect(rect.x, rect.y, Mathf.Max(0f, gear.x - rect.x - 2f), rect.height), FairyToonL10n.Text(titleKey), s_HeaderLabel);
             if (GUI.Button(gear, EditorGUIUtility.IconContent("_Popup"), s_Gear))
                 FairyToonClipboard.ShowMenu(block, m_Editor, () => m_Props);
         }
@@ -2040,7 +2040,7 @@ namespace NW.FairyToon.Editor
             string shown = FairyToonL10n.Text(title);
             if (Searching && !Hit(shown)) return;
             EditorGUILayout.Space(4f);
-            EditorGUILayout.LabelField(shown, EditorStyles.boldLabel);
+            EditorGUILayout.LabelField(shown, EditorStyles.label);
         }
 
         private void Help(string message, MessageType type)
@@ -2270,10 +2270,29 @@ namespace NW.FairyToon.Editor
             // These lilToon colours are gamma-authored even above 1; HDR editing must not add the native HDR flag.
             // TexturePropertySingleLine ignores custom drawers, so any [FairyToonHDR] colour takes the HDR picker here.
             var content = new GUIContent(shown);
-            if (other != null && IsGammaHdr(extra))
-            m_Editor.TexturePropertyWithHDRColor(content, tex, other, true);
-            else
-            m_Editor.TexturePropertySingleLine(content, tex, other);
+            bool hdr = other != null && IsGammaHdr(extra);
+            m_Editor.TexturePropertySingleLine(content, tex, hdr ? null : other);
+            if (hdr) HdrSwatch(other);
+        }
+
+        private void HdrSwatch(MaterialProperty prop)
+        {
+            Rect row = EditorGUILayout.GetControlRect();
+            BeginScope(row, prop);
+            EditorGUI.showMixedValue = prop.hasMixedValue;
+            EditorGUI.BeginChangeCheck();
+            Rect label = row;
+            label.width = Mathf.Max(0f, row.width - 148f);
+            Rect swatch = new Rect(label.xMax + 4f, row.y, 18f, row.height);
+            Rect hex = new Rect(swatch.xMax + 4f, row.y, 122f, row.height);
+            EditorGUI.LabelField(label, FairyToonL10n.Property(prop.name, prop.displayName));
+            Color value = EditorGUI.ColorField(swatch, GUIContent.none, prop.colorValue, true, true, true);
+            string written = EditorGUI.TextField(hex, ColorUtility.ToHtmlStringRGB(value));
+            if (written != ColorUtility.ToHtmlStringRGB(value) && ColorUtility.TryParseHtmlString("#" + written, out Color parsed))
+                value = new Color(parsed.r, parsed.g, parsed.b, value.a);
+            if (EditorGUI.EndChangeCheck()) prop.colorValue = value;
+            EditorGUI.showMixedValue = false;
+            EndScope();
         }
 
         private bool IsGammaHdr(string property)
