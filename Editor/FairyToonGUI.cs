@@ -516,7 +516,7 @@ namespace NW.FairyToon.Editor
         private void MatCapGroup()
         {
 
-            if (!PrefixMatches("_MatCap") && !SearchAllows("_UseMatCap", "_UseMatCap2nd", "|ft.Tiling", "|ft.Offset", "|sZRotCancel", "|sFixPerspective")) return;
+            if (!PrefixMatches("_MatCap") && !SearchAllows("_UseMatCap", "_UseMatCap2nd", "|ft.Tiling", "|ft.Offset", "|sZRotCancel", "|sFixPerspective", "|sCustomNormal")) return;
             if (!BeginSection("MatCapGroup", "sMatCapSetting", null, false, PropertyBlock.MatCaps, true, false)) return;
             MatCap();
             EndSection();
@@ -542,6 +542,8 @@ namespace NW.FairyToon.Editor
 
         private static bool Hit(string text) => !string.IsNullOrEmpty(text) && text.IndexOf(s_Search, StringComparison.Ordinal) >= 0;
 
+        private static bool HitIgnore(string text) => !string.IsNullOrEmpty(text) && text.IndexOf(s_Search, StringComparison.OrdinalIgnoreCase) >= 0;
+
         /// <summary>The query contains the whole phrase, so a short word such as Offset does not open a longer Alpha Mask label.</summary>
         private bool Phrase(string phrase) =>
             Searching && !string.IsNullOrEmpty(phrase) && s_Search.IndexOf(phrase, StringComparison.OrdinalIgnoreCase) >= 0;
@@ -562,13 +564,13 @@ namespace NW.FairyToon.Editor
         private bool RowVisible(string name, string shown, string tooltip = null)
         {
             if (!Searching) return true;
-            if (!string.IsNullOrEmpty(name) && Hit(name)) return true;
-            if (!string.IsNullOrEmpty(shown) && (Hit(shown) || Hit(FairyToonL10n.Text(shown)))) return true;
-            if (!string.IsNullOrEmpty(tooltip) && (Hit(tooltip) || Hit(FairyToonL10n.Text(tooltip)))) return true;
+            if (!string.IsNullOrEmpty(name) && HitIgnore(name)) return true;
+            if (!string.IsNullOrEmpty(shown) && (HitIgnore(shown) || HitIgnore(FairyToonL10n.Text(shown)))) return true;
+            if (!string.IsNullOrEmpty(tooltip) && (HitIgnore(tooltip) || HitIgnore(FairyToonL10n.Text(tooltip)))) return true;
             if (string.IsNullOrEmpty(name)) return false;
             var prop = Prop(name);
             if (prop == null) return false;
-            return Hit(prop.displayName) || Hit(FairyToonL10n.Property(name, prop.displayName));
+            return HitIgnore(prop.displayName) || HitIgnore(FairyToonL10n.Property(name, prop.displayName));
         }
 
         /// <summary>A section stays visible while any row it actually draws matches. A leading "|" is a label key with no property.</summary>
@@ -681,7 +683,7 @@ namespace NW.FairyToon.Editor
             bool gem = EverySelectedIsGem();
             bool first = gem
                 ? SearchAllows("_MainTex", "_Color")
-                : SearchAllows("_MainTex", "_Color", "_MainTexHSVG", "_MainColorAdjustMask", "|sReset", "|sColorAdjust", "|sMask");
+                : SearchAllows("_MainTex", "_Color", "_MainTexHSVG", "_MainColorAdjustMask", "|sReset", "|sColorAdjust", "|sMask", "|HSV / Gamma");
             bool alpha = SearchAllows("_AlphaMaskMode", "_AlphaMask", "_AlphaMaskScale", "_AlphaMaskValue", "_Cutoff", "|sAlphaMaskWarnOpaque", "|ft.AlphaMaskInvert", "|ft.AlphaMaskTransparency", "|ft.AlphaMaskAdvanced")
                 || Phrase("Alpha Mask Scale") || Phrase("Alpha Mask Offset");
             bool second = PrefixMatches("_Main2nd") || PrefixMatches("_FT_Main2nd") || SearchAllows("_Color2nd", "_UseMain2ndTex", "|UV Line Angle (radians)", "|Position / Direction (XY UV, XYZ Object, W UV Angle)", "|ft.Tiling", "|ft.Offset", "|sAsDecal", "|Decal", "|sMirrorMode", "|sCopyMode", "|sPositionX", "|sPositionY", "|sScaleX", "|sScaleY", "|sScroll", "|sRotate", "|sDissolveMode");
@@ -800,17 +802,17 @@ namespace NW.FairyToon.Editor
                 }
                 if (Prop("_Cutoff") != null) P("_Cutoff");
                 string advancedLabel = Event.current.alt ? "_AlphaMaskScale, _AlphaMaskValue" : FairyToonL10n.Text("ft.AlphaMaskAdvanced");
-                bool namedScale = Phrase("Alpha Mask Scale");
-                bool namedOffset = Phrase("Alpha Mask Offset");
-                bool showAdvanced = !Searching || namedScale || namedOffset || Hit(advancedLabel) || Hit("_AlphaMaskScale") || Hit("_AlphaMaskValue");
+                bool namedScale = Phrase("Alpha Mask Scale") || HitIgnore("_AlphaMaskScale");
+                bool namedOffset = Phrase("Alpha Mask Offset") || HitIgnore("_AlphaMaskValue");
+                bool showAdvanced = !Searching || namedScale || namedOffset || Hit(advancedLabel) || HitIgnore("_AlphaMaskScale") || HitIgnore("_AlphaMaskValue");
                 if (showAdvanced)
                     m_AlphaMaskAdvanced = EditorGUILayout.Toggle(advancedLabel, m_AlphaMaskAdvanced);
                 if (showAdvanced && (m_AlphaMaskAdvanced || namedScale || namedOffset))
                 {
                     EditorGUI.indentLevel++;
-                    if (!Searching || m_AlphaMaskAdvanced || namedScale || Hit("_AlphaMaskScale"))
+                    if (!Searching || m_AlphaMaskAdvanced || namedScale)
                         P("_AlphaMaskScale", "Scale");
-                    if (!Searching || m_AlphaMaskAdvanced || namedOffset || Hit("_AlphaMaskValue"))
+                    if (!Searching || m_AlphaMaskAdvanced || namedOffset)
                         P("_AlphaMaskValue", "Offset");
                     EditorGUI.indentLevel--;
                 }
@@ -1596,7 +1598,7 @@ namespace NW.FairyToon.Editor
         private void MatCap()
         {
 
-            bool firstCap = PrefixMatches("_MatCap", "_MatCap2nd") || SearchAllows("_UseMatCap", "|ft.Tiling", "|ft.Offset", "|sZRotCancel", "|sFixPerspective");
+            bool firstCap = PrefixMatches("_MatCap", "_MatCap2nd") || SearchAllows("_UseMatCap", "|ft.Tiling", "|ft.Offset", "|sZRotCancel", "|sFixPerspective", "|sCustomNormal");
             bool secondCap = PrefixMatches("_MatCap2nd") || SearchAllows("_UseMatCap2nd", "|ft.Tiling", "|ft.Offset", "|sZRotCancel", "|sFixPerspective");
             if (!firstCap && !secondCap) return;
             if (firstCap && BeginSection("MatCap", "sMatCap", Prop("_UseMatCap"), false, PropertyBlock.MatCap1st, false))
@@ -2003,9 +2005,13 @@ namespace NW.FairyToon.Editor
         {
             bool queue = SearchAllows("|sRenderingReset", "|Render Queue", "|Enable GPU Instancing", "|Double Sided Global Illumination",
                 "|" + L10n.Tr("Render Queue"), "|" + L10n.Tr("Enable GPU Instancing"), "|" + L10n.Tr("Double Sided Global Illumination"),
-                "_SrcBlend", "_DstBlend", "_SrcBlendAlpha", "_DstBlendAlpha", "_ZWrite", "_ZTest", "_OffsetFactor", "_OffsetUnits", "_Cull", "_OutlineCull", "|Alpha To Coverage (hair)");
+                "_SrcBlend", "_DstBlend", "_SrcBlendAlpha", "_DstBlendAlpha", "_ZWrite", "_ZTest", "_OffsetFactor", "_OffsetUnits", "_Cull", "|Alpha To Coverage (hair)");
             bool fur = SelectedRenderingMode(FairyToonMaterialSetup.Fur) && SearchAllows("_FurCull", "_FurZClip", "_FurZTest", "_FurColorMask", "_FurOffsetFactor", "_FurOffsetUnits", "_FurBlendOp", "_FurBlendOpAlpha", "_FurSrcBlend", "_FurDstBlend", "_FurSrcBlendAlpha", "_FurDstBlendAlpha", "_FurZWrite", "_FurAlphaToMask");
-            if (!queue && !fur) return;
+            bool outlineHit = Prop("_OutlineCull") != null
+                && !SelectedRenderingMode(FairyToonMaterialSetup.Fur)
+                && !SelectedRenderingMode(FairyToonMaterialSetup.Gem)
+                && Searching && RowVisible("_OutlineCull", null);
+            if (!queue && !fur && !outlineHit) return;
             if (!BeginSection("Rendering", "sRenderingSetting", null, false, PropertyBlock.Rendering, true, false)) return;
             if ((!Searching || LabelOnly("sRenderingReset")) && GUILayout.Button(FairyToonL10n.Text("sRenderingReset")))
             {
@@ -2462,8 +2468,9 @@ namespace NW.FairyToon.Editor
             var property = Prop("_FurVector");
             if (property == null) return;
             Vector4 value = property.vectorValue;
-            bool showDirection = !Searching || LabelOnly("sVectorTex");
-            bool showLength = !Searching || LabelOnly("sLength");
+            bool bothAxes = HitIgnore("_FurVector") || Phrase("Direction (XYZ), Length (W)");
+            bool showDirection = !Searching || bothAxes || LabelOnly("sVectorTex");
+            bool showLength = !Searching || bothAxes || LabelOnly("sLength");
             if (!showDirection && !showLength) return;
             if (showDirection)
             {
