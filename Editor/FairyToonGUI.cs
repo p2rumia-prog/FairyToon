@@ -75,24 +75,26 @@ namespace NW.FairyToon.Editor
                     if (properties[i] != null && properties[i].applyPropertyCallback != null) { callbackOwned = true; break; }
             if (callbackOwned) SuppressValidation();
             try
-            InitStyles();
-            FairyToonL10n.DrawLanguagePopup();
-            FairyToonL10n.DrawModeToolbar();
-            EditorGUILayout.Space(2f);
-
-            switch (FairyToonL10n.Mode)
             {
-                case FairyToonEditorMode.Advanced:
-                    DrawAdvanced();
-                    break;
-                case FairyToonEditorMode.Preset:
-                    DrawPresetPage();
-                    break;
-                case FairyToonEditorMode.ShaderSetting:
-                    DrawShaderSettingPage();
-                    break;
-                default:
-                    throw new InvalidOperationException("Unhandled FairyToon editor mode " + FairyToonL10n.Mode);
+                InitStyles();
+                FairyToonL10n.DrawLanguagePopup();
+                FairyToonL10n.DrawModeToolbar();
+                EditorGUILayout.Space(2f);
+
+                switch (FairyToonL10n.Mode)
+                {
+                    case FairyToonEditorMode.Advanced:
+                        DrawAdvanced();
+                        break;
+                    case FairyToonEditorMode.Preset:
+                        DrawPresetPage();
+                        break;
+                    case FairyToonEditorMode.ShaderSetting:
+                        DrawShaderSettingPage();
+                        break;
+                    default:
+                        throw new InvalidOperationException("Unhandled FairyToon editor mode " + FairyToonL10n.Mode);
+                }
             }
             finally
             {
