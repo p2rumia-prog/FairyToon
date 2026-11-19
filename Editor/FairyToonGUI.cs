@@ -2025,6 +2025,8 @@ namespace NW.FairyToon.Editor
                 m_Props = MaterialEditor.GetMaterialProperties(m_Editor.targets);
             }
             if (m_Frames.Count > 0) m_Frames.RemoveAt(m_Frames.Count - 1);
+            if (queue)
+            {
             OpenBox(FairyToonL10n.Text("sRendering"), null, PropertyBlock.Rendering, true);
             m_Frames.Add(true);
             P("_Cull");
@@ -2034,9 +2036,25 @@ namespace NW.FairyToon.Editor
             P("_OffsetUnits");
             if (AnyCoverage(FairyToonMaterialSetup.Cutout))
                 P("_AlphaToMask", "Alpha To Coverage (hair)");
-            if (SelectedRenderingMode(FairyToonMaterialSetup.Fur))
+            SubHeader("Derived (set from Rendering Mode)");
+            using (new EditorGUI.DisabledScope(true))
             {
-                SubHeader("Fur Rendering");
+                P("_SrcBlend");
+                P("_DstBlend");
+                P("_SrcBlendAlpha");
+                P("_DstBlendAlpha");
+            }
+            if (UnityRowVisible("Render Queue")) m_Editor.RenderQueueField();
+            if (UnityRowVisible("Enable GPU Instancing")) m_Editor.EnableInstancingField();
+            if (UnityRowVisible("Double Sided Global Illumination")) m_Editor.DoubleSidedGIField();
+
+            EndSection();
+            }
+            if (fur)
+            {
+                EditorGUILayout.BeginVertical(s_Outer);
+                EditorGUILayout.LabelField("Fur Rendering");
+                EditorGUILayout.BeginVertical(s_InnerFull);
                 P("_FurCull");
                 P("_FurZClip");
                 P("_FurZTest");
@@ -2055,20 +2073,9 @@ namespace NW.FairyToon.Editor
                     P("_FurZWrite");
                     P("_FurAlphaToMask");
                 }
+                EditorGUILayout.EndVertical();
+                EditorGUILayout.EndVertical();
             }
-            SubHeader("Derived (set from Rendering Mode)");
-            using (new EditorGUI.DisabledScope(true))
-            {
-                P("_SrcBlend");
-                P("_DstBlend");
-                P("_SrcBlendAlpha");
-                P("_DstBlendAlpha");
-            }
-            if (UnityRowVisible("Render Queue")) m_Editor.RenderQueueField();
-            if (UnityRowVisible("Enable GPU Instancing")) m_Editor.EnableInstancingField();
-            if (UnityRowVisible("Double Sided Global Illumination")) m_Editor.DoubleSidedGIField();
-
-            EndSection();
             // lilToon puts Outline Cull in its own box under Rendering. FairyToon has no separate outline ZTest or colour mask.
             bool outline = Prop("_OutlineCull") != null
                 && !SelectedRenderingMode(FairyToonMaterialSetup.Fur)
