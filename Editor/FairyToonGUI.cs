@@ -922,12 +922,27 @@ namespace NW.FairyToon.Editor
         // A callback is one renderer snapshot: merge into that snapshot and let the callback keep it.
         private void SetDissolveComponents(MaterialProperty property, Vector4 value, int components)
         {
-            if (property.applyPropertyCallback != null || property.targets == null || property.targets.Length <= 1)
+            Vector4 merged = property.vectorValue;
+            for (int component = 0; component < 4; component++)
+                if ((components & (1 << component)) != 0) merged[component] = value[component];
+            if (property.applyPropertyCallback != null)
             {
-                Vector4 current = property.vectorValue;
-                for (int component = 0; component < 4; component++)
-                    if ((components & (1 << component)) != 0) current[component] = value[component];
-                property.vectorValue = current;
+                // Returning true stops Unity writing this one vector onto every target. If the
+                // callback did not keep the write, merge the edited axis into each material.
+                bool handled = false;
+                MaterialProperty.ApplyPropertyCallback original = property.applyPropertyCallback;
+                property.applyPropertyCallback = (changed, mask, previous) =>
+                {
+                    handled = original(changed, mask, previous);
+                    return true;
+                };
+                try { property.vectorValue = merged; }
+                finally { property.applyPropertyCallback = original; }
+                if (handled) return;
+            }
+            else if (property.targets == null || property.targets.Length <= 1)
+            {
+                property.vectorValue = merged;
                 return;
             }
             Undo.IncrementCurrentGroup();
