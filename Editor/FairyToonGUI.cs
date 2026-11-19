@@ -45,6 +45,7 @@ namespace NW.FairyToon.Editor
         private static GUIStyle s_Foldout;
         private static GUIStyle s_Gear;
         private bool m_AlphaMaskAdvanced;
+        private int m_InnerDepth;
         private static bool s_ProSkin;
         private static string s_Search = "";
 
@@ -270,7 +271,8 @@ namespace NW.FairyToon.Editor
         {
             string key = PrefsPrefix + "Foldout.Version";
             bool open = EditorPrefs.GetBool(key, false);
-            open = EditorGUILayout.Foldout(open, "FairyToon " + "0.2.1", true);
+            var versionStyle = new GUIStyle(EditorStyles.label) { fontStyle = FontStyle.Bold };
+            open = EditorGUILayout.Foldout(open, "FairyToon 0.2.1", true, versionStyle);
             if (open != EditorPrefs.GetBool(key, false)) EditorPrefs.SetBool(key, open);
             if (!open) return;
             EditorGUI.indentLevel++;
@@ -282,7 +284,7 @@ namespace NW.FairyToon.Editor
         {
             string key = PrefsPrefix + "Foldout.Help";
             bool open = EditorPrefs.GetBool(key, false);
-            open = EditorGUILayout.Foldout(open, "Help", true);
+            open = EditorGUILayout.Foldout(open, FairyToonL10n.Text("sHelp"), true);
             if (open != EditorPrefs.GetBool(key, false)) EditorPrefs.SetBool(key, open);
             if (!open) return;
             EditorGUI.indentLevel++;
@@ -650,18 +652,19 @@ namespace NW.FairyToon.Editor
             string titleKey = layer == "2nd" ? "sMainColor2nd" : "sMainColor3rd";
             var block = layer == "2nd" ? PropertyBlock.MainColor2nd : PropertyBlock.MainColor3rd;
             if (!BeginSection("Main" + layer, titleKey, Prop("_UseMain" + layer + "Tex"), false, block)) return;
-            Tex(prefix + "Tex", "_Color" + layer, "Texture");
-            Tex(prefix + "BlendMask", null, "Mask");
+            Tex(prefix + "Tex", "_Color" + layer, "sColor");
+            ColorAlpha("_Color" + layer);
+            P(prefix + "TexIsMSDF", "MSDF");
+            P(prefix + "Tex_Cull", "sCullMode");
+            P(prefix + "EnableLighting", "sEnableLighting");
             P(prefix + "TexBlendMode", "sBlendMode");
-            P(prefix + "EnableLighting", "Enable Lighting");
-            ScaleOffset(prefix + "Tex");
+            P(prefix + "TexAlphaMode", "sAlphaMode");
             P(prefix + "Tex_UVMode", "UV Mode");
+            DrawDecal(prefix);
+            ScaleOffset(prefix + "Tex");
             P(prefix + "TexAngle", "Angle (radians)");
             P(prefix + "Tex_ScrollRotate", "Scroll XY / Rotation Speed W");
-            P(prefix + "TexAlphaMode", "Alpha Mode");
-            P(prefix + "Tex_Cull", "Layer Cull");
-            DrawDecal(prefix);
-            P(prefix + "TexIsMSDF", "MSDF");
+            Tex(prefix + "BlendMask", null, "sMask");
             if (!EverySelectedIsGem()) DissolveControls(prefix + "Dissolve", false);
             EndSection();
         }
@@ -1452,6 +1455,7 @@ namespace NW.FairyToon.Editor
             if (!SearchAllows("_UseRim", "_RimColorTex", "_RimColor", "_RimBorder", "_RimBlur", "_RimFresnelPower", "_RimShadowMask", "_RimMainStrength", "_RimNormalStrength", "_RimEnableLighting", "_RimBackfaceMask", "_RimApplyTransparency", "_RimBlendMode", "_RimDirStrength", "_RimDirRange", "_RimIndirRange", "_RimIndirColor", "_RimIndirBorder", "_RimIndirBlur", "_RimColorTex|Color")) return;
             if (!BeginSection("Rim", "sRimLightSetting", Prop("_UseRim"), false, PropertyBlock.RimLight)) return;
             Tex("_RimColorTex", "_RimColor", "Color");
+            ColorAlpha("_RimColor");
             P("_RimBorder");
             P("_RimBlur");
             P("_RimFresnelPower");
@@ -1631,20 +1635,22 @@ namespace NW.FairyToon.Editor
             if (!SearchAllows("_RefractionStrength", "_RefractionFresnelPower", "_GemChromaticAberration", "_GemEnvContrast", "_GemEnvColor", "_GemParticleLoop", "_GemParticleColor", "_GemVRParallaxStrength", "_SmoothnessTex", "_Smoothness", "_Reflectance", "_ReflectionCubeOverride", "_ReflectionCubeTex", "_RefractionStrength|Refraction Strength", "_RefractionFresnelPower|Refraction Fresnel Power", "_GemChromaticAberration|Chromatic Aberration", "_GemEnvContrast|Environment Contrast", "_GemEnvColor|Environment Color", "_GemParticleLoop|Particle Loop", "_GemParticleColor|Particle Color", "_GemVRParallaxStrength|VR Parallax Strength", "_SmoothnessTex|Smoothness", "_Reflectance|Reflectance", "_ReflectionCubeOverride|Override Cubemap", "_ReflectionCubeTex|Reflection Cubemap")) return;
             if (!BeginSection("Gem", "sGemSetting", null, true, PropertyBlock.Gem)) return;
             Help("Gem refraction samples the opaque scene color. Transparent objects are not included.", MessageType.None);
-            P("_RefractionStrength", "Refraction Strength");
-            P("_RefractionFresnelPower", "Refraction Fresnel Power");
-            P("_GemChromaticAberration", "Chromatic Aberration");
-            P("_GemEnvContrast", "Environment Contrast");
-            P("_GemEnvColor", "Environment Color");
-            P("_GemParticleLoop", "Particle Loop");
-            P("_GemParticleColor", "Particle Color");
-            P("_GemVRParallaxStrength", "VR Parallax Strength");
-            Tex("_SmoothnessTex", "_Smoothness", "Smoothness");
+            SubHeader("sRefraction");
+            P("_RefractionStrength", "sStrength");
+            P("_RefractionFresnelPower", "sFresnelPower");
+            SubHeader("sGem");
+            P("_GemChromaticAberration", "sChromaticAberration");
+            P("_GemEnvContrast", "sEnvContrast");
+            P("_GemEnvColor", "sEnvColor");
+            P("_GemParticleLoop", "sParticleLoop");
+            P("_GemParticleColor", "sParticleColor");
+            P("_GemVRParallaxStrength", "sVRParallaxStrength");
+            Tex("_SmoothnessTex", "_Smoothness", "sSmoothness");
             ScaleOffset("_SmoothnessTex");
-            P("_Reflectance", "Reflectance");
-            P("_ReflectionCubeOverride", "Override Cubemap");
-            if (Float("_ReflectionCubeOverride") > 0.5f || Prop("_ReflectionCubeOverride")?.hasMixedValue == true)
-            Tex("_ReflectionCubeTex", null, "Reflection Cubemap");
+            P("_Reflectance", "sReflectance");
+            Tex("_ReflectionCubeTex", "_ReflectionCubeColor", "sCubemap");
+            P("_ReflectionCubeOverride", "sOverrideCubemap");
+            P("_ReflectionCubeEnableLighting", "sCubemapEnableLighting");
             EndSection();
         }
 
@@ -1994,12 +2000,39 @@ namespace NW.FairyToon.Editor
                     return false;
                 }
             }
+            EditorGUILayout.BeginVertical(EditorStyles.helpBox);
+            m_InnerDepth++;
             return true;
         }
 
         private void EndSection()
         {
+            if (m_InnerDepth > 0)
+            {
+                EditorGUILayout.EndVertical();
+                m_InnerDepth--;
+            }
             EditorGUILayout.EndVertical();
+        }
+
+        private void ColorAlpha(string name)
+        {
+            var prop = Prop(name);
+            if (prop == null || prop.propertyType != ShaderPropertyType.Color) return;
+            if (!RowVisible(name, "sAlpha")) return;
+            Rect row = EditorGUILayout.GetControlRect();
+            BeginScope(row, prop);
+            EditorGUI.showMixedValue = prop.hasMixedValue;
+            EditorGUI.BeginChangeCheck();
+            float alpha = EditorGUI.Slider(row, FairyToonL10n.Text("sAlpha"), prop.colorValue.a, 0f, 1f);
+            if (EditorGUI.EndChangeCheck())
+            {
+                Color color = prop.colorValue;
+                color.a = alpha;
+                prop.colorValue = color;
+            }
+            EditorGUI.showMixedValue = false;
+            EndScope();
         }
 
         private void SubHeader(string title)
