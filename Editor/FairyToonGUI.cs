@@ -50,7 +50,7 @@ namespace NW.FairyToon.Editor
             else
             {
                 if (labeled) EditorGUI.PrefixLabel(position, new GUIContent(label));
-                float x = position.x + labelWidth;
+                float x = position.x + (labeled ? EditorGUIUtility.labelWidth : 0f);
                 float room = Mathf.Max(0f, position.xMax - x);
                 float swatchWidth = Mathf.Min(swatch, Mathf.Max(18f, room - gap - 36f));
                 if (swatchWidth + gap >= room) swatchWidth = Mathf.Max(0f, room * 0.45f);
