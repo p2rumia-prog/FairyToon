@@ -44,7 +44,7 @@ namespace NW.FairyToon.Editor
         private static GUIStyle s_Box;
         private static GUIStyle s_Foldout;
         private static GUIStyle s_Gear;
-        private static bool s_AlphaMaskAdvanced;
+        private bool m_AlphaMaskAdvanced;
         private static bool s_ProSkin;
         private static string s_Search = "";
 
@@ -593,27 +593,36 @@ namespace NW.FairyToon.Editor
                 var offset = Prop("_AlphaMaskValue");
                 if (scale != null && offset != null)
                 {
-                    bool showInvert = LabelOnly("ft.AlphaMaskInvert");
-                    bool showTransparency = LabelOnly("ft.AlphaMaskTransparency");
+                    // Alt shows the real property names, as lilToon does. Ordinary search uses each control's own label.
+                    string invertLabel = Event.current.alt ? scale.name : FairyToonL10n.Text("ft.AlphaMaskInvert");
+                    string transparencyLabel = Event.current.alt
+                        ? scale.name + ", " + offset.name
+                        : FairyToonL10n.Text("ft.AlphaMaskTransparency");
                     bool invert = Number(scale) < 0f;
                     float transparency = Number(offset) - (invert ? 1f : 0f);
                     bool invertChanged = false;
                     bool transparencyChanged = false;
-                    if (showInvert)
+                    if (!Searching || Hit(invertLabel))
                     {
+                        Rect row = EditorGUILayout.GetControlRect();
+                        BeginScope(row, scale);
                         EditorGUI.showMixedValue = scale.hasMixedValue || offset.hasMixedValue;
                         EditorGUI.BeginChangeCheck();
-                        invert = EditorGUILayout.Toggle(FairyToonL10n.Text("ft.AlphaMaskInvert"), invert);
+                        invert = EditorGUI.Toggle(row, invertLabel, invert);
                         invertChanged = EditorGUI.EndChangeCheck();
                         EditorGUI.showMixedValue = false;
+                        EndScope();
                     }
-                    if (showTransparency)
+                    if (!Searching || Hit(transparencyLabel))
                     {
+                        Rect row = EditorGUILayout.GetControlRect();
+                        BeginScope(row, offset);
                         EditorGUI.showMixedValue = scale.hasMixedValue || offset.hasMixedValue;
                         EditorGUI.BeginChangeCheck();
-                        transparency = EditorGUILayout.Slider(FairyToonL10n.Text("ft.AlphaMaskTransparency"), transparency, -1f, 1f);
+                        transparency = EditorGUI.Slider(row, transparencyLabel, transparency, -1f, 1f);
                         transparencyChanged = EditorGUI.EndChangeCheck();
                         EditorGUI.showMixedValue = false;
+                        EndScope();
                     }
                     if (invertChanged || transparencyChanged)
                     {
@@ -622,16 +631,14 @@ namespace NW.FairyToon.Editor
                     }
                 }
                 if (Prop("_Cutoff") != null) P("_Cutoff");
-                if (LabelOnly("ft.AlphaMaskAdvanced") || RowVisible("_AlphaMaskScale", "Scale") || RowVisible("_AlphaMaskValue", "Offset"))
+                if (!Searching || LabelOnly("ft.AlphaMaskAdvanced"))
+                    m_AlphaMaskAdvanced = EditorGUILayout.Toggle(FairyToonL10n.Text("ft.AlphaMaskAdvanced"), m_AlphaMaskAdvanced);
+                if (m_AlphaMaskAdvanced)
                 {
-                    s_AlphaMaskAdvanced = EditorGUILayout.Toggle(FairyToonL10n.Text("ft.AlphaMaskAdvanced"), s_AlphaMaskAdvanced);
-                    if (s_AlphaMaskAdvanced)
-                    {
-                        EditorGUI.indentLevel++;
-                        P("_AlphaMaskScale", "Scale");
-                        P("_AlphaMaskValue", "Offset");
-                        EditorGUI.indentLevel--;
-                    }
+                    EditorGUI.indentLevel++;
+                    P("_AlphaMaskScale", "Scale");
+                    P("_AlphaMaskValue", "Offset");
+                    EditorGUI.indentLevel--;
                 }
             }
             EditorGUILayout.EndVertical();
