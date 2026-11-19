@@ -118,7 +118,9 @@ namespace NW.FairyToon.Editor
                     if (!shouldCopyTex && entry.IsTexture) continue;
                     if (!CopiedProperties.TryGetValue(entry.Name, out MaterialProperty source) || source == null) continue;
                     MaterialProperty dest = Find(props, entry.Name);
-                    if (dest != null && ChangesValue(dest, source)) ApplyValue(dest, source);
+                    // lilToon enters the texture and _ST branch only when the target descriptor exists.
+                    if (dest == null) continue;
+                    if (ChangesValue(dest, source)) ApplyValue(dest, source);
                     if (!entry.IsTexture || !shouldCopyTex) continue;
                     string st = entry.Name + "_ST";
                     if (!CopiedVectorProperties.TryGetValue(st, out Vector4 scale) || !material.HasProperty(st) || material.GetVector(st) == scale)
@@ -189,7 +191,8 @@ namespace NW.FairyToon.Editor
                 if (!Contains(entry, block) || (!shouldCopyTex && entry.IsTexture)) continue;
                 if (!CopiedProperties.TryGetValue(entry.Name, out MaterialProperty source) || source == null) continue;
                 MaterialProperty dest = Find(props, entry.Name);
-                if (dest != null && ChangesValue(dest, source))
+                if (dest == null) continue;
+                if (ChangesValue(dest, source))
                 {
                     change = true;
                     // An unchanged property never calls its setter, so its callback must not cancel the undo snapshot.

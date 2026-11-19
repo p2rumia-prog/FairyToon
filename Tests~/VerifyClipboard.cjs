@@ -74,8 +74,12 @@ if (!resetFn.includes('ApplyDefault(prop, shader, index)'))
   errors.push('Reset must call ApplyDefault');
 if (!clipCs.includes('Undo.RecordObjects(editor.targets, undo)'))
   errors.push('direct paste must record the selected materials');
-if (/if \(dest == null\) continue;/.test(clipCs.slice(clipCs.indexOf('bool PasteWouldChange'), clipCs.indexOf('bool ResetWouldChange'))))
-  errors.push('an _ST difference must still count when the destination property is missing');
+const would = clipCs.slice(clipCs.indexOf('bool PasteWouldChange'), clipCs.indexOf('bool ResetWouldChange'));
+if (!/if \(dest == null\) continue;/.test(would))
+  errors.push('texture scale must not paste when the target descriptor is missing');
+const pasteLoop = pasteFn.slice(pasteFn.indexOf('FairyToonGUI.BeginMenuOperation'));
+if (!/if \(dest == null\) continue;/.test(pasteLoop))
+  errors.push('the paste loop must skip _ST when the target descriptor is missing');
 if (resetFn.indexOf('ResetWouldChange') < 0 || resetFn.indexOf('ResetWouldChange') > resetFn.indexOf('BeginUndo'))
   errors.push('Reset must return before recording undo when every value is already the default');
 
