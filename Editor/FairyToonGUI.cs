@@ -2314,10 +2314,10 @@ namespace NW.FairyToon.Editor
                 float field = (row.xMax - label.xMax) * 0.5f;
                 int mask = 0;
                 EditorGUI.BeginChangeCheck();
-                float scrollX = EditorGUI.FloatField(new Rect(label.xMax, row.y, field - 2f, row.height), value.x);
+                float scrollX = EditorGUI.FloatField(new Rect(label.xMax, row.y, field - 2f, row.height), "X", value.x);
                 if (EditorGUI.EndChangeCheck()) { value.x = scrollX; mask |= 1; }
                 EditorGUI.BeginChangeCheck();
-                float scrollY = EditorGUI.FloatField(new Rect(label.xMax + field, row.y, field, row.height), value.y);
+                float scrollY = EditorGUI.FloatField(new Rect(label.xMax + field, row.y, field, row.height), "Y", value.y);
                 if (EditorGUI.EndChangeCheck()) { value.y = scrollY; mask |= 2; }
                 if (mask != 0) SetDissolveComponents(property, value, mask);
                 EditorGUI.showMixedValue = false;
@@ -2393,7 +2393,7 @@ namespace NW.FairyToon.Editor
             for (int axis = 0; axis < 3; axis++)
             {
                 EditorGUI.BeginChangeCheck();
-                float next = EditorGUI.FloatField(new Rect(label.xMax + axis * field, dirRow.y, field - 2f, dirRow.height), value[axis]);
+                float next = EditorGUI.FloatField(new Rect(label.xMax + axis * field, dirRow.y, field - 2f, dirRow.height), "XYZ"[axis].ToString(), value[axis]);
                 if (!EditorGUI.EndChangeCheck()) continue;
                 value[axis] = next;
                 mask |= 1 << axis;
@@ -2558,21 +2558,33 @@ namespace NW.FairyToon.Editor
         private static bool OfferTextureScale(MaterialProperty tex, Vector4 value, int mask)
         {
             if (tex.applyPropertyCallback == null) return false;
+            Vector4 before = tex.textureScaleAndOffset;
+            // The setter returns before the callback when the first descriptor already has this ST
+            // and the texture reference is not mixed. An explicit axis submit still has to reach animation.
+            bool setterRuns = tex.hasMixedValue || before != value;
             bool handled = false;
             MaterialProperty.ApplyPropertyCallback original = tex.applyPropertyCallback;
             s_ProbeDepth++;
-            tex.applyPropertyCallback = (changed, changedMask, previous) =>
+            try
             {
-                handled = original(changed, mask, previous);
-                return true;
-            };
-            try { tex.textureScaleAndOffset = value; }
+                if (!setterRuns)
+                {
+                    handled = original(tex, mask, before);
+                    return handled;
+                }
+                tex.applyPropertyCallback = (changed, changedMask, previous) =>
+                {
+                    handled = original(changed, mask, previous);
+                    return true;
+                };
+                tex.textureScaleAndOffset = value;
+                return handled;
+            }
             finally
             {
                 tex.applyPropertyCallback = original;
                 s_ProbeDepth--;
             }
-            return handled;
         }
 
         private static bool Locked(Material material, string name)
@@ -3072,10 +3084,10 @@ namespace NW.FairyToon.Editor
             Rect yRect = new Rect(label.xMax + field, row.y, field, row.height);
             EditorGUI.showMixedValue = mixed;
             EditorGUI.BeginChangeCheck();
-            float editedX = EditorGUI.FloatField(xRect, shownX);
+            float editedX = EditorGUI.FloatField(xRect, "X", shownX);
             bool changeX = EditorGUI.EndChangeCheck();
             EditorGUI.BeginChangeCheck();
-            float editedY = EditorGUI.FloatField(yRect, shownY);
+            float editedY = EditorGUI.FloatField(yRect, "Y", shownY);
             bool changeY = EditorGUI.EndChangeCheck();
             if (changeX || changeY)
             {
