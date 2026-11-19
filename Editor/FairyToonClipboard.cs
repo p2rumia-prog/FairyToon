@@ -19,7 +19,9 @@ namespace NW.FairyToon.Editor
     /// block's names that are already in the dictionary, and skips textures unless Paste (with texture).
     /// Texture scale/offset is stored in <see cref="CopiedVectorProperties"/> as <c>name + "_ST"</c> and is
     /// applied only with textures, and only on the first selected material, as lilToon does.
-    /// Values are the stored <see cref="MaterialProperty"/> read at paste time (lilToon's snapshot).
+    /// Values are the <see cref="MaterialProperty"/> objects the inspector received in OnGUI, read at paste time.
+    /// Copy and paste do not call <c>MaterialEditor.GetMaterialProperties</c>, so a renderer property block or
+    /// animation-mode callback on those objects is kept. Texture scale/offset still uses the first target only.
     /// The dictionaries live for the editor session and are empty again after a domain reload, same as lilToon's static fields.
     /// A lilToon inspector does not share this clipboard.
     /// </summary>
@@ -62,14 +64,14 @@ namespace NW.FairyToon.Editor
             { PropertyBlock.Rendering, "advanced/rendering" }
         };
 
-        internal static void ShowMenu(PropertyBlock block, MaterialEditor editor)
+        internal static void ShowMenu(PropertyBlock block, MaterialEditor editor, System.Func<MaterialProperty[]> currentProperties)
         {
-            if (editor == null) return;
+            if (editor == null || currentProperties == null) return;
             var menu = new GenericMenu();
-            menu.AddItem(new GUIContent(FairyToonL10n.Text("sCopy")), false, () => CopyProperties(block, editor));
-            menu.AddItem(new GUIContent(FairyToonL10n.Text("sPaste")), false, () => PasteProperties(block, editor, false));
-            menu.AddItem(new GUIContent(FairyToonL10n.Text("sPasteWithTexture")), false, () => PasteProperties(block, editor, true));
-            menu.AddItem(new GUIContent(FairyToonL10n.Text("sReset")), false, () => ResetProperties(block, editor));
+            menu.AddItem(new GUIContent(FairyToonL10n.Text("sCopy")), false, () => CopyProperties(block, editor, currentProperties()));
+            menu.AddItem(new GUIContent(FairyToonL10n.Text("sPaste")), false, () => PasteProperties(block, editor, currentProperties(), false));
+            menu.AddItem(new GUIContent(FairyToonL10n.Text("sPasteWithTexture")), false, () => PasteProperties(block, editor, currentProperties(), true));
+            menu.AddItem(new GUIContent(FairyToonL10n.Text("sReset")), false, () => ResetProperties(block, editor, currentProperties()));
             if (s_ManualAnchors.TryGetValue(block, out string anchor))
             {
                 string url = FairyToonL10n.Text("sManualURL") + anchor;
@@ -78,11 +80,10 @@ namespace NW.FairyToon.Editor
             menu.ShowAsContext();
         }
 
-        internal static void CopyProperties(PropertyBlock block, MaterialEditor editor)
+        internal static void CopyProperties(PropertyBlock block, MaterialEditor editor, MaterialProperty[] props)
         {
             var material = editor.target as Material;
-            if (material == null) return;
-            MaterialProperty[] props = MaterialEditor.GetMaterialProperties(new UnityEngine.Object[] { material });
+            if (material == null || props == null) return;
             for (int i = 0; i < FairyToonPropertyBlocks.All.Length; i++)
             {
                 FairyToonPropertyEntry entry = FairyToonPropertyBlocks.All[i];
@@ -97,13 +98,13 @@ namespace NW.FairyToon.Editor
             }
         }
 
-        internal static void PasteProperties(PropertyBlock block, MaterialEditor editor, bool shouldCopyTex)
+        internal static void PasteProperties(PropertyBlock block, MaterialEditor editor, MaterialProperty[] props, bool shouldCopyTex)
         {
             var material = editor.target as Material;
-            if (material == null) return;
+            if (material == null || props == null) return;
             string undo = shouldCopyTex ? "FairyToon Paste (with textures)" : "FairyToon Paste";
             int group = BeginUndo(editor, undo);
-            MaterialProperty[] props = MaterialEditor.GetMaterialProperties(editor.targets);
+            var coverage = SnapshotCoverage(editor);
             for (int i = 0; i < FairyToonPropertyBlocks.All.Length; i++)
             {
                 FairyToonPropertyEntry entry = FairyToonPropertyBlocks.All[i];
@@ -118,14 +119,16 @@ namespace NW.FairyToon.Editor
                 if (CopiedVectorProperties.ContainsKey(st) && material.HasProperty(st))
                     material.SetVector(st, CopiedVectorProperties[st]);
             }
+            MigrateCoverage(coverage);
             ApplyMaterials(editor);
             Undo.CollapseUndoOperations(group);
         }
 
-        internal static void ResetProperties(PropertyBlock block, MaterialEditor editor)
+        internal static void ResetProperties(PropertyBlock block, MaterialEditor editor, MaterialProperty[] props)
         {
+            if (props == null) return;
             int group = BeginUndo(editor, "FairyToon Reset");
-            MaterialProperty[] props = MaterialEditor.GetMaterialProperties(editor.targets);
+            var coverage = SnapshotCoverage(editor);
             for (int i = 0; i < props.Length; i++)
             {
                 MaterialProperty prop = props[i];
@@ -158,6 +161,7 @@ namespace NW.FairyToon.Editor
                         throw new InvalidOperationException("Unhandled shader property type " + prop.propertyType);
                 }
             }
+            MigrateCoverage(coverage);
             ApplyMaterials(editor);
             Undo.CollapseUndoOperations(group);
         }
@@ -184,6 +188,41 @@ namespace NW.FairyToon.Editor
                     break;
                 default:
                     throw new InvalidOperationException("Unhandled shader property type " + dest.propertyType);
+            }
+        }
+
+        private struct CoverageSnapshot
+        {
+            public Material Material;
+            public int Mode;
+            public int Queue;
+            public int RawQueue;
+        }
+
+        private static List<CoverageSnapshot> SnapshotCoverage(MaterialEditor editor)
+        {
+            var shots = new List<CoverageSnapshot>();
+            foreach (Object target in editor.targets)
+            {
+                var material = target as Material;
+                if (material == null) continue;
+                shots.Add(new CoverageSnapshot
+                {
+                    Material = material,
+                    Mode = FairyToonMaterialSetup.GetRenderingMode(material),
+                    Queue = material.renderQueue,
+                    RawQueue = material.rawRenderQueue
+                });
+            }
+            return shots;
+        }
+
+        private static void MigrateCoverage(List<CoverageSnapshot> shots)
+        {
+            for (int i = 0; i < shots.Count; i++)
+            {
+                CoverageSnapshot shot = shots[i];
+                FairyToonMaterialSetup.MigrateMainCoverageQueue(shot.Material, shot.Mode, shot.Queue, shot.RawQueue);
             }
         }
 

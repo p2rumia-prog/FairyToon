@@ -10,10 +10,12 @@ const shaders = fs.readdirSync(path.join(root, 'Shaders')).filter(f => f.endsWit
 const shaderText = shaders.map(f => fs.readFileSync(path.join(root, 'Shaders', f), 'utf8')).join('\n');
 const fairyNames = new Set();
 const hidden = new Set();
+const shaderType = {};
 for (const line of shaderText.split('\n')) {
-  const m = line.match(/(?<![A-Za-z0-9_])(_[A-Za-z0-9_]+)\s*\(\s*"/);
+  const m = line.match(/(?<![A-Za-z0-9_])(_[A-Za-z0-9_]+)\s*\(\s*"[^"]*"\s*,\s*(\w+)/);
   if (!m) continue;
   fairyNames.add(m[1]);
+  if (!shaderType[m[1]]) shaderType[m[1]] = m[2];
   if (line.includes('[HideInInspector]')) hidden.add(m[1]);
 }
 
@@ -41,6 +43,25 @@ for (const name of Object.keys(lil)) {
   if (a !== b) errors.push(name + ' blocks FairyToon=[' + a + '] lilToon=[' + b + ']');
   if (got.texture !== lil[name].texture) errors.push(name + ' isTexture FairyToon=' + got.texture + ' lilToon=' + lil[name].texture);
 }
+const textureTypes = new Set(['2D', '3D', 'Cube', 'CubeArray']);
+let shared = 0;
+for (const name of Object.keys(lil)) if (fairyNames.has(name) && fairy[name]) shared++;
+for (const name of Object.keys(fairy)) {
+  if (lil[name] && fairyNames.has(name)) continue;
+  const type = shaderType[name];
+  if (!type) continue;
+  const isTexture = textureTypes.has(type);
+  if (fairy[name].texture !== isTexture)
+    errors.push(name + ' FairyToon-only isTexture=' + fairy[name].texture + ' but ShaderLab type is ' + type);
+}
+if (!fairy._EFIrisFrame || fairy._EFIrisFrame.texture !== true || shaderType._EFIrisFrame !== '2D')
+  errors.push('_EFIrisFrame is a 2D texture and must be isTexture true');
+if (!lil._GlitterColorTex_UVMode || lil._GlitterColorTex_UVMode.texture !== true)
+  errors.push('lilToon snapshot should keep the _GlitterColorTex_UVMode isTexture quirk');
+if (!fairy._GlitterColorTex_UVMode || fairy._GlitterColorTex_UVMode.texture !== true)
+  errors.push('shared _GlitterColorTex_UVMode must keep lilToon isTexture true even though the shader declares an Int');
+if (shaderType._GlitterColorTex_UVMode === '2D')
+  errors.push('_GlitterColorTex_UVMode is not a texture in ShaderLab; the kept flag is the lilToon quirk');
 for (const name of Object.keys(fairy)) {
   for (const block of fairy[name].blocks) {
     if (drop.has(block)) errors.push(name + ' uses omitted block ' + block);
@@ -63,4 +84,4 @@ if (errors.length) {
   console.error(errors.join('\n'));
   process.exit(1);
 }
-console.log('property blocks ok', Object.keys(fairy).length, 'shared checked');
+console.log('property blocks ok', Object.keys(fairy).length, 'entries,', shared, 'shared names checked');

@@ -1752,7 +1752,7 @@ test('mixed Rendering and Fur popups change every target only after a user selec
         const body = gui.slice(start + 1, end - 1)
             .replace(/foreach \(Object target in m_Editor.targets\)/g, 'for (const target of m_Editor.targets)')
             .replace(/ as Material/g, '').replace(/\b(?:int|bool|var)\s+/g, 'let ')
-            .replace(/new\[\] \{([^}]+)\}/g, '[$1]');
+            .replace(/new\[\]\s*\{([^}]+)\}/g, '[$1]');
         for (const mixed of [false, true]) for (const chooseFirst of [false, true]) {
             const materials = [{ mode: 1 }, { mode: mixed ? 2 : 1 }];
             const edits = [], undo = [];
@@ -1772,6 +1772,7 @@ test('mixed Rendering and Fur popups change every target only after a user selec
                 } },
                 Undo: { RecordObjects: targets => undo.push(targets.length) }, EditorUtility: { SetDirty() {} },
                 MaterialEditor: { GetMaterialProperties: () => [] }, GUIUtility: { ExitGUI() {} },
+                RowVisible: () => true, FairyToonL10n: { Text: (key) => key },
                 Debug: { LogError: () => assert.fail('known rendering mode must exist') },
             };
             new Function(...Object.keys(bindings), body)(...Object.values(bindings));
@@ -2297,8 +2298,8 @@ test('dissolve position GUI edits one mixed-selection component and noise contro
     const onGUI=hlslBody(gui.slice(gui.indexOf('class FairyToonGUI')),'OnGUI');
     const order=['Glitter();','Gem();','Outline();','Dissolve();','Refraction();','Fur();','SeeThrough();','Stencil();','Rendering();'];
     for(let i=1;i<order.length;i++) assert.ok(onGUI.indexOf(order[i])>onGUI.indexOf(order[i-1]),'lilToon section order '+order[i]);
-    assert.match(onGUI,/if \(m_Advanced\) Dissolve\(\);/);
-    assert.match(hlslBody(gui,'Dissolve'),/BeginSection\("Dissolve", "Dissolve"\)/);
+    assert.match(onGUI,/if \(AnyRunsWholeDissolve\(\)\) Dissolve\(\);/);
+    assert.match(hlslBody(gui,'Dissolve'),/BeginSection\("Dissolve", "sDissolve"/);
     assert.doesNotMatch(hlslBody(gui,'MainColor'),/DissolveControls/);
 
     assert.match(position,/DissolveComponentMixed\(property, component\)/);
@@ -2427,8 +2428,8 @@ test('dissolve notices use final target coverage after conversion profiles and i
     assert.match(notice, /HasActiveDissolve\(source, "_Dissolve"\)/);
     assert.match(notice, /mode == FairyToonMaterialSetup\.Opaque \|\| mode == FairyToonMaterialSetup\.Gem/);
     const gui = read('Editor/FairyToonGUI.cs');
-    assert.match(gui, /SelectedRenderingMode\(FairyToonMaterialSetup\.Opaque\) \|\| SelectedRenderingMode\(FairyToonMaterialSetup\.Gem\)/);
-    assert.match(gui, /HelpBox\("Dissolve is ignored on Opaque and Gem materials/);
+    assert.match(gui, /mode != FairyToonMaterialSetup\.Opaque && mode != FairyToonMaterialSetup\.Gem/);
+    assert.match(gui, /EverySelectedIsGem\(\)/);
 });
 
 

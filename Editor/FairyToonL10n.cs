@@ -23,33 +23,44 @@ namespace NW.FairyToon.Editor
     internal static partial class FairyToonL10n
     {
         public const string LanguageKey = "NW.FairyToon.GUI.Language";
+        public const string LanguageModeKey = "NW.FairyToon.GUI.LanguageMode";
         public const string ModeKey = "NW.FairyToon.GUI.EditorMode";
 
         private static readonly string[] LanguageCodes = { "en", "ja", "zh-Hans" };
         private static readonly string[] LanguageNames = { "English", "日本語", "简体中文" };
 
-        private static bool s_Loaded;
+        private static bool s_ModeLoaded;
 
         public static string Language { get; private set; } = "en";
+
+        /// <summary>True while the menu is Auto. Auto re-reads the editor language instead of a saved code.</summary>
+        public static bool FollowsEditor { get; private set; } = true;
 
         public static FairyToonEditorMode Mode { get; private set; } = FairyToonEditorMode.Advanced;
 
         public static void EnsureLoaded()
         {
-            if (s_Loaded) return;
-            s_Loaded = true;
+            if (!s_ModeLoaded)
+            {
+                s_ModeLoaded = true;
+                // NW.FairyToon.GUI.Advanced was Simple (false) or Advanced (true). Neither value is
+                // Preset or Shader Setting, so both land on the full Advanced page. The old key is left in place.
+                if (!EditorPrefs.HasKey(ModeKey))
+                    EditorPrefs.SetInt(ModeKey, (int)FairyToonEditorMode.Advanced);
+                int stored = EditorPrefs.GetInt(ModeKey, (int)FairyToonEditorMode.Advanced);
+                Mode = stored >= 0 && stored <= (int)FairyToonEditorMode.ShaderSetting
+                    ? (FairyToonEditorMode)stored
+                    : FairyToonEditorMode.Advanced;
+            }
 
-            // NW.FairyToon.GUI.Advanced was Simple (false) or Advanced (true). Neither value is
-            // Preset or Shader Setting, so both land on the full Advanced page. The old key is left in place.
-            if (!EditorPrefs.HasKey(ModeKey))
-                EditorPrefs.SetInt(ModeKey, (int)FairyToonEditorMode.Advanced);
-            int stored = EditorPrefs.GetInt(ModeKey, (int)FairyToonEditorMode.Advanced);
-            Mode = stored >= 0 && stored <= (int)FairyToonEditorMode.ShaderSetting
-                ? (FairyToonEditorMode)stored
-                : FairyToonEditorMode.Advanced;
-
-            if (!EditorPrefs.HasKey(LanguageKey))
-                EditorPrefs.SetString(LanguageKey, DetectEditorLanguage());
+            // Missing LanguageMode means Auto. The previous build wrote a detected code into LanguageKey
+            // on first open, which is not an explicit choice, so those installs follow the editor again.
+            FollowsEditor = EditorPrefs.GetString(LanguageModeKey, "auto") != "explicit";
+            if (FollowsEditor)
+            {
+                Language = DetectEditorLanguage();
+                return;
+            }
             string code = EditorPrefs.GetString(LanguageKey, "en");
             Language = Array.IndexOf(LanguageCodes, code) >= 0 ? code : "en";
         }
@@ -74,13 +85,25 @@ namespace NW.FairyToon.Editor
         public static void DrawLanguagePopup()
         {
             EnsureLoaded();
-            int index = Array.IndexOf(LanguageCodes, Language);
+            var names = new[] { Text("ft.LanguageAuto"), LanguageNames[0], LanguageNames[1], LanguageNames[2] };
+            int index = FollowsEditor ? 0 : Array.IndexOf(LanguageCodes, Language) + 1;
             if (index < 0) index = 0;
             EditorGUI.BeginChangeCheck();
-            int next = EditorGUILayout.Popup(Text("Language"), index, LanguageNames);
+            int next = EditorGUILayout.Popup(Text("Language"), index, names);
             if (!EditorGUI.EndChangeCheck() || next == index) return;
-            Language = LanguageCodes[next];
-            EditorPrefs.SetString(LanguageKey, Language);
+            if (next <= 0)
+            {
+                FollowsEditor = true;
+                EditorPrefs.SetString(LanguageModeKey, "auto");
+                Language = DetectEditorLanguage();
+            }
+            else
+            {
+                FollowsEditor = false;
+                Language = LanguageCodes[next - 1];
+                EditorPrefs.SetString(LanguageModeKey, "explicit");
+                EditorPrefs.SetString(LanguageKey, Language);
+            }
             UnityEditorInternal.InternalEditorUtility.RepaintAllViews();
         }
 

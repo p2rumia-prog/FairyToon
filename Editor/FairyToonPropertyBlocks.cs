@@ -172,7 +172,7 @@ namespace NW.FairyToon.Editor
         new("_EFIrisEdge", false, PropertyBlock.Iris),
         new("_EFIrisEdgeFade", false, PropertyBlock.Iris),
         new("_EFIrisEdgeSoftness", false, PropertyBlock.Iris),
-        new("_EFIrisFrame", false, PropertyBlock.Iris, PropertyBlock.IrisAvatar),
+        new("_EFIrisFrame", true, PropertyBlock.Iris, PropertyBlock.IrisAvatar),
         new("_EFIrisGaze", false, PropertyBlock.Iris),
         new("_EFIrisGlowColor", false, PropertyBlock.Iris),
         new("_EFIrisGlowStrength", false, PropertyBlock.Iris),

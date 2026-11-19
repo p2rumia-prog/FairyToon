@@ -2,7 +2,7 @@
 
 ## 0.2.1
 
-- Inspector only. Advanced / Preset / Shader Setting replace Simple / Advanced, with lilToon's search field and parent/child copy blocks. Labels go through English, Japanese, and Simplified Chinese. The clipboard accumulates by property name the way lilToon does. No shader or material-default change.
+- Inspector only. Advanced / Preset / Shader Setting replace Simple / Advanced. Search matches drawn rows, including mode popups and the render queue. Main Color 1st and Alpha Mask have their own gears, and Anisotropy sits inside Normal Map. The clipboard accumulates by property name, uses the inspector's MaterialProperty objects, and migrates the coverage queue when Base paste or reset changes the main-shader mode. Language can follow the editor. No shader or material-default change.
 
 ## 0.2.0 (2026-11-17)
 

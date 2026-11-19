@@ -1,0 +1,168 @@
+using System.Collections.Generic;
+using NUnit.Framework;
+using UnityEditor;
+using UnityEngine;
+
+namespace NW.FairyToon.Editor.Tests
+{
+    public class FairyToonClipboardTests
+    {
+        private readonly List<Object> m_Objects = new List<Object>();
+
+        [SetUp]
+        public void ClearClipboard()
+        {
+            FairyToonClipboard.CopiedProperties.Clear();
+            FairyToonClipboard.CopiedVectorProperties.Clear();
+        }
+
+        [TearDown]
+        public void DestroyObjects()
+        {
+            foreach (Object item in m_Objects)
+                if (item != null) Object.DestroyImmediate(item);
+            m_Objects.Clear();
+            FairyToonClipboard.CopiedProperties.Clear();
+            FairyToonClipboard.CopiedVectorProperties.Clear();
+        }
+
+        [Test]
+        public void CopyMatCapThenRimLightAndPasteEachBlock()
+        {
+            Material source = NewMaterial();
+            Material dest = NewMaterial();
+            source.SetColor("_MatCapColor", Color.red);
+            source.SetColor("_RimColor", Color.blue);
+            dest.SetColor("_MatCapColor", Color.black);
+            dest.SetColor("_RimColor", Color.black);
+            MaterialProperty[] sourceProps = Properties(source);
+            MaterialProperty[] destProps = Properties(dest);
+            MaterialEditor sourceEditor = EditorFor(source);
+            MaterialEditor destEditor = EditorFor(dest);
+
+            FairyToonClipboard.CopyProperties(PropertyBlock.MatCaps, sourceEditor, sourceProps);
+            FairyToonClipboard.CopyProperties(PropertyBlock.RimLight, sourceEditor, sourceProps);
+            FairyToonClipboard.PasteProperties(PropertyBlock.MatCaps, destEditor, destProps, false);
+
+            Assert.AreEqual(Color.red, dest.GetColor("_MatCapColor"));
+            Assert.AreEqual(Color.black, dest.GetColor("_RimColor"));
+            FairyToonClipboard.PasteProperties(PropertyBlock.RimLight, destEditor, destProps, false);
+            Assert.AreEqual(Color.blue, dest.GetColor("_RimColor"));
+        }
+
+        [Test]
+        public void OverlappingBlockPastesTheSharedPropertyOnly()
+        {
+            Material source = NewMaterial();
+            Material dest = NewMaterial();
+            source.SetFloat("_ShadowEnvStrength", 0.25f);
+            source.SetColor("_ShadowColor", Color.green);
+            dest.SetFloat("_ShadowEnvStrength", 1f);
+            dest.SetColor("_ShadowColor", Color.white);
+            MaterialProperty[] sourceProps = Properties(source);
+            MaterialProperty[] destProps = Properties(dest);
+
+            FairyToonClipboard.CopyProperties(PropertyBlock.Shadow, EditorFor(source), sourceProps);
+            FairyToonClipboard.PasteProperties(PropertyBlock.Lighting, EditorFor(dest), destProps, false);
+
+            Assert.AreEqual(0.25f, dest.GetFloat("_ShadowEnvStrength"), 0.0001f);
+            Assert.AreEqual(Color.white, dest.GetColor("_ShadowColor"));
+        }
+
+        [Test]
+        public void TexturePasteIsOptionalAndScaleOffsetUsesTheFirstTarget()
+        {
+            Material source = NewMaterial();
+            Material first = NewMaterial();
+            Material second = NewMaterial();
+            Texture2D texture = Track(new Texture2D(4, 4));
+            source.SetTexture("_MatCapTex", texture);
+            source.SetTextureScale("_MatCapTex", new Vector2(2f, 3f));
+            first.SetTexture("_MatCapTex", null);
+            second.SetTexture("_MatCapTex", null);
+            MaterialProperty[] sourceProps = Properties(source);
+            MaterialEditor destEditor = (MaterialEditor)Editor.CreateEditor(new Object[] { first, second });
+            Track(destEditor);
+            MaterialProperty[] destProps = MaterialEditor.GetMaterialProperties(new Object[] { first, second });
+
+            FairyToonClipboard.CopyProperties(PropertyBlock.MatCaps, EditorFor(source), sourceProps);
+            FairyToonClipboard.PasteProperties(PropertyBlock.MatCaps, destEditor, destProps, false);
+            Assert.IsNull(first.GetTexture("_MatCapTex"));
+            Assert.AreEqual(new Vector2(1f, 1f), first.GetTextureScale("_MatCapTex"));
+
+            FairyToonClipboard.PasteProperties(PropertyBlock.MatCaps, destEditor, destProps, true);
+            Assert.AreEqual(texture, first.GetTexture("_MatCapTex"));
+            Assert.AreEqual(texture, second.GetTexture("_MatCapTex"));
+            Assert.AreEqual(new Vector2(2f, 3f), first.GetTextureScale("_MatCapTex"));
+            Assert.AreEqual(new Vector2(1f, 1f), second.GetTextureScale("_MatCapTex"));
+        }
+
+        [Test]
+        public void ResetRestoresTheShaderDefault()
+        {
+            Material material = NewMaterial();
+            Color original = material.GetColor("_RimColor");
+            material.SetColor("_RimColor", Color.cyan);
+            MaterialProperty[] props = Properties(material);
+            FairyToonClipboard.ResetProperties(PropertyBlock.RimLight, EditorFor(material), props);
+            Assert.AreEqual(original, material.GetColor("_RimColor"));
+        }
+
+        [Test]
+        public void PasteIsOneUndoStep()
+        {
+            Material source = NewMaterial();
+            Material dest = NewMaterial();
+            source.SetColor("_RimColor", Color.yellow);
+            dest.SetColor("_RimColor", Color.black);
+            Color before = dest.GetColor("_RimColor");
+            FairyToonClipboard.CopyProperties(PropertyBlock.RimLight, EditorFor(source), Properties(source));
+            FairyToonClipboard.PasteProperties(PropertyBlock.RimLight, EditorFor(dest), Properties(dest), false);
+            Assert.AreEqual(Color.yellow, dest.GetColor("_RimColor"));
+            Undo.PerformUndo();
+            Assert.AreEqual(before, dest.GetColor("_RimColor"));
+        }
+
+        [Test]
+        public void BasePasteMigratesTheDefaultCoverageQueue()
+        {
+            Shader shader = Shader.Find(FairyToon.ShaderName);
+            if (shader == null) Assert.Ignore("FairyToon shader is not imported.");
+            Material opaque = Track(new Material(shader));
+            Material cutout = Track(new Material(shader));
+            FairyToonMaterialSetup.SetRenderingMode(opaque, FairyToonMaterialSetup.Opaque);
+            FairyToonMaterialSetup.SetRenderingMode(cutout, FairyToonMaterialSetup.Cutout);
+            Assert.AreEqual(2450, cutout.renderQueue);
+            MaterialProperty[] sourceProps = Properties(opaque);
+            MaterialProperty[] destProps = Properties(cutout);
+            FairyToonClipboard.CopyProperties(PropertyBlock.Base, EditorFor(opaque), sourceProps);
+            FairyToonClipboard.PasteProperties(PropertyBlock.Base, EditorFor(cutout), destProps, false);
+            Assert.AreEqual(FairyToonMaterialSetup.Opaque, FairyToonMaterialSetup.GetRenderingMode(cutout));
+            Assert.AreEqual(2000, cutout.renderQueue);
+            Assert.IsFalse(cutout.IsKeywordEnabled("_ALPHATEST_ON"));
+        }
+
+        private Material NewMaterial()
+        {
+            Shader shader = Shader.Find(FairyToon.ShaderName);
+            if (shader == null) Assert.Ignore("FairyToon shader is not imported.");
+            return Track(new Material(shader));
+        }
+
+        private MaterialEditor EditorFor(Material material)
+        {
+            return Track((MaterialEditor)Editor.CreateEditor(material));
+        }
+
+        private static MaterialProperty[] Properties(Material material)
+        {
+            return MaterialEditor.GetMaterialProperties(new Object[] { material });
+        }
+
+        private T Track<T>(T item) where T : Object
+        {
+            m_Objects.Add(item);
+            return item;
+        }
+    }
+}

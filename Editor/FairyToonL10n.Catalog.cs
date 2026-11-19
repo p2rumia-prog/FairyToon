@@ -36,6 +36,8 @@ namespace NW.FairyToon.Editor
             Add("sLightMaxLimit", "Upper brightness limit", "明るさの上限", "亮度上限");
             Add("sLightMinLimit", "Lower brightness limit", "明るさの下限", "亮度下限");
             Add("sLightingSettings", "Lighting", "ライティング・明るさ設定", "照明设置");
+            Add("sMainColor", "Main Color", "メインカラー", "主色");
+            Add("sAlphaMask", "Alpha Mask", "アルファマスク", "Alpha 蒙版");
             Add("sMainColor2nd", "Main Color 2nd", "メインカラー2nd", "第二主色");
             Add("sMainColor3rd", "Main Color 3rd", "メインカラー3rd", "第三主色");
             Add("sMainColorSetting", "Main Color / Alpha", "メインカラー / 透過設定", "主色 / Alpha 设置");
@@ -417,7 +419,16 @@ namespace NW.FairyToon.Editor
             Add("Rest pupil centre in left iris units, used by both fold and layer; the right eye mirrors the horizontal offset.", "Rest pupil centre in left iris units, used by both fold and layer; the right eye mirrors the horizontal offset.", "静止時の瞳孔中心（左虹彩の単位）。折り込みとレイヤーの両方が使います。右目は水平オフセットを反転します。", "静止瞳孔中心，以左虹膜为单位，折叠和层都使用；右眼镜像水平偏移。");
             Add("ft.presetPlaceholder", "Material presets come in a later phase. This page is the Preset slot from lilToon; nothing here changes the material yet.", "マテリアルプリセットは後の段階で入ります。このページは lilToon のプリセット枠で、まだマテリアルは変わりません。", "材质预设会在后续阶段加入。此页是 lilToon 的预设页；现在还不会改材质。");
             Add("ft.shaderSettingIntro", "FairyToon does not strip shader variants. Nothing on this page removes features or rewrites materials. lilToon's build-size optimization, Built-in pipeline, and VRChat settings are not part of this shader.", "FairyToon はシェーダーバリアントを削りません。このページは機能の削除もマテリアルの書き換えもしません。lilToon のビルドサイズ最適化、Built-in、VRChat の設定はこのシェーダーにはありません。", "FairyToon 不会裁掉着色器变体。此页不会删除功能，也不会改写材质。lilToon 的构建体积优化、内置管线和 VRChat 设置不属于这个着色器。");
-            Add("ft.languageLivesInTopBar", "Inspector language is the menu at the top of this inspector: English, Japanese, or Simplified Chinese. Until you choose one, it follows the Unity Editor language and otherwise stays English.", "インスペクターの言語は、このインスペクター上部のメニューです。English、日本語、简体中文。選ぶまでは Unity エディターの言語に従い、それ以外は英語です。", "检视器语言是本检视器顶部的菜单：English、日本語、简体中文。在你选择之前，它跟随 Unity 编辑器语言，否则为英语。");
+            Add("ft.languageLivesInTopBar", "Inspector language is the menu at the top of this inspector. Auto follows the Unity Editor language and otherwise stays English. English, Japanese, and Simplified Chinese are explicit choices.", "インスペクターの言語は、このインスペクター上部のメニューです。自動は Unity エディターの言語に従い、それ以外は英語です。English、日本語、简体中文は明示的な選択です。", "检视器语言是本检视器顶部的菜单。自动跟随 Unity 编辑器语言，否则为英语。English、日本語、简体中文是明确选择。");
+            Add("ft.LanguageAuto", "Auto", "自動", "自动");
+            Add("None", "None", "なし", "无");
+            Add("Replace", "Replace", "置き換え", "替换");
+            Add("Multiply", "Multiply", "乗算", "相乘");
+            Add("Add", "Add", "加算", "相加");
+            Add("Subtract", "Subtract", "減算", "相减");
+            Add("Render Queue", "Render Queue", "レンダーキュー", "渲染队列");
+            Add("Enable GPU Instancing", "Enable GPU Instancing", "GPU インスタンシングを有効化", "启用 GPU 实例化");
+            Add("Double Sided Global Illumination", "Double Sided Global Illumination", "両面グローバルイルミネーション", "双面全局光照");
             Add("ft.defaultShadingHeader", "Default shading model", "既定のシェーディングモデル", "默认着色模型");
             Add("ft.defaultShadingBody", "New materials start as Toon, the shader default for Shading Model. Endfield is chosen per material under Base Setting. There is no project-wide default.", "新しいマテリアルは Toon から始まります。これは Shading Model のシェーダー既定値です。Endfield は Base Setting でマテリアルごとに選びます。プロジェクト全体の既定値はありません。", "新材质从 Toon 开始，这是 Shading Model 的着色器默认值。Endfield 在 Base Setting 里按每个材质选择。没有项目级默认值。");
             Add("ft.EFSurface", "Endfield: Surface", "Endfield: 表面", "Endfield：表面");
@@ -1082,6 +1093,12 @@ namespace NW.FairyToon.Editor
             Add("p:_DstBlend", "Destination Blend", "転送先ブレンド", "目标混合");
             Add("p:_SrcBlendAlpha", "Source Blend Alpha", "転送元ブレンド（アルファ）", "源混合 Alpha");
             Add("p:_DstBlendAlpha", "Destination Blend Alpha", "転送先ブレンド（アルファ）", "目标混合 Alpha");
+            Add("p:_AnisotropyTangentWidth", "Tangent Width", "タンジェント方向の幅", "切线宽度");
+            Add("p:_AnisotropyBitangentWidth", "Bitangent Width", "バイタンジェント方向の幅", "副切线宽度");
+            Add("p:_SubpassCutoff", "Subpass Cutoff", "Subpass Cutoff (完全透明にする範囲)", "子通道裁切");
+            Add("p:_AlphaToMask", "Alpha To Coverage", "アルファトゥカバレッジ", "透明转覆盖");
+            Add("p:_SeeThroughMaskCutoff", "Cutoff", "Cutoff (完全透明にする範囲)", "裁切");
+            Add("p:_UseMatCap", "MatCap", "マットキャップ設定", "MatCap 设置");
         }
 
         private static void Add(string key, string english, string japanese, string chinese)

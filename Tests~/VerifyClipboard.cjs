@@ -19,6 +19,12 @@ if (!copyFn.includes('CopiedProperties[entry.Name] = prop')) errors.push('Copy m
 const pasteFn = clipCs.slice(clipCs.indexOf('void PasteProperties'), clipCs.indexOf('void ResetProperties'));
 if (!pasteFn.includes('!shouldCopyTex && entry.IsTexture')) errors.push('Paste must skip textures unless Paste (with texture)');
 if (!pasteFn.includes('CopiedVectorProperties')) errors.push('Paste with texture must apply stored _ST');
+if (/GetMaterialProperties/.test(copyFn) || /GetMaterialProperties/.test(pasteFn))
+  errors.push('Copy and Paste must use the MaterialProperty array from OnGUI, not GetMaterialProperties');
+if (!pasteFn.includes('MigrateCoverage')) errors.push('Paste must migrate the main-shader queue in the same undo step');
+const resetFn = clipCs.slice(clipCs.indexOf('void ResetProperties'), clipCs.indexOf('void ApplyValue'));
+if (/GetMaterialProperties/.test(resetFn) || !resetFn.includes('MigrateCoverage'))
+  errors.push('Reset must use the OnGUI properties and migrate the main-shader queue');
 
 const table = {};
 const re = /new\("(_[^"]+)", (true|false), ((?:PropertyBlock\.\w+,?\s*)+)\)/g;
@@ -96,6 +102,34 @@ if (paste('Reflection', new Set(names('Reflection')), true).includes('_MetallicG
 
 if (names('Fur').includes('_FurMode')) errors.push('Fur block must not include _FurMode');
 if (names('Fur').includes('_FurCull')) errors.push('lilToon tags _FurCull as Rendering, not Fur');
+if (!table._RefractionStrength || table._RefractionStrength.blocks.includes('Reflection'))
+  errors.push('_RefractionStrength is Refraction and Gem, not Reflection');
+if (!table._Metallic || !table._Metallic.blocks.includes('Reflection') || !table._Metallic.blocks.includes('Gem'))
+  errors.push('_Metallic is Reflection and Gem');
+
+const gui = fs.readFileSync(path.join(root, 'Editor/FairyToonGUI.cs'), 'utf8');
+function method(name) {
+  const start = gui.indexOf('private void ' + name + '(');
+  const open = gui.indexOf('{', start);
+  let depth = 0;
+  for (let i = open; i < gui.length; i++) {
+    if (gui[i] === '{') depth++;
+    else if (gui[i] === '}') { depth--; if (depth === 0) return gui.slice(open, i + 1); }
+  }
+  return '';
+}
+const advanced = method('DrawAdvanced');
+if (advanced.includes('Anisotropy();')) errors.push('Anisotropy must be inside the Normal Map parent, not a sibling in DrawAdvanced');
+if (!method('NormalGroup').includes('Anisotropy();')) errors.push('Normal Map parent must draw Anisotropy');
+if (!method('MainColorFirst').includes('PropertyBlock.MainColor1st')) errors.push('Main Color 1st needs its own gear');
+if (!method('AlphaMask').includes('PropertyBlock.AlphaMask')) errors.push('Alpha Mask needs its own gear');
+if (gui.includes('m_SearchRelax') || gui.includes('BlockHit')) errors.push('search must not relax on a title hit or use clipboard membership');
+if (method('Fur').includes('_FurCull') || method('Fur').includes('_FurStencilRef'))
+  errors.push('Fur render-state and stencil rows must leave the Fur section');
+if (!method('Rendering').includes('_FurCull') || !method('Stencil').includes('_FurStencilRef'))
+  errors.push('Fur render-state rows belong in Rendering and Fur stencil rows in Stencil');
+if (!method('Fur').includes('cutoutLength')) errors.push('Fur cutout length must follow Two Pass or a mixed Fur Mode');
+if (!gui.includes('() => m_Props')) errors.push('the gear menu must pass the OnGUI MaterialProperty array');
 
 if (errors.length) {
   console.error(errors.join('\n'));

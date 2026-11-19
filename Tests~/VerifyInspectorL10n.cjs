@@ -42,8 +42,14 @@ for (const name of props) {
     if (!row[lang]) errors.push(name + ' missing ' + lang);
     else if (raw.test(row[lang])) errors.push(name + ' ' + lang + ' is a raw key ' + row[lang]);
   }
-  if (row.ja && row.ja === row.en && row.zh === row.en && /[a-z]{4,}/.test(row.en) && !latinJa.has(row.en))
-    errors.push(name + ' falls back to English "' + row.en + '"');
+  // A copied English sentence is a fallback even when it has no four-letter lowercase word ("Toon Edge AA").
+  // All-caps tokens (ZTest, GSAA) and strings lilToon itself leaves in Latin are allowed.
+  const acronym = /^[A-Z0-9][A-Z0-9 .+\-/]*$/;
+  for (const lang of ['ja', 'zh']) {
+    const value = row[lang];
+    if (value && value === row.en && /[a-z]/.test(row.en) && !latinJa.has(row.en) && !acronym.test(row.en))
+      errors.push(name + ' ' + lang + ' falls back to English "' + row.en + '"');
+  }
 }
 if (hidden.has('_SeeThroughHead') === false) errors.push('expected _SeeThroughHead to be hidden');
 

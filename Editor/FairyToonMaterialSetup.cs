@@ -56,6 +56,16 @@ namespace NW.FairyToon.Editor
         }
 
         /// <summary>Swaps variants while retaining saved named values, including textures and their scale/offset.</summary>
+        /// <summary>Same default-queue rule as <see cref="SetRenderingMode"/> when coverage changes on the main shader.</summary>
+        public static void MigrateMainCoverageQueue(Material material, int previousMode, int previousQueue, int previousRawQueue)
+        {
+            if (material == null || !IsFairyToonShader(material.shader)) return;
+            int mode = GetRenderingMode(material);
+            if (previousMode > Transparent || mode > Transparent || previousMode == mode) return;
+            bool useDefaultQueue = previousRawQueue < 0 || previousQueue == GetDefaultRenderQueue(previousMode);
+            material.renderQueue = useDefaultQueue ? -1 : previousQueue;
+        }
+
         public static bool SetRenderingMode(Material material, int renderingMode)
         {
             if (material == null || !IsFairyToonShader(material.shader)) return false;
