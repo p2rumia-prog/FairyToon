@@ -171,10 +171,10 @@ namespace NW.FairyToon.Editor
                     MigrateCoverage(coverage);
                     ApplyMaterials(editor);
                 }
-                Undo.CollapseUndoOperations(group);
             }
             finally
             {
+                Undo.CollapseUndoOperations(group);
                 FairyToonGUI.EndMenuOperation(null);
             }
         }

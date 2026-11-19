@@ -75,6 +75,10 @@ namespace NW.FairyToon.Editor
             int furMode = Mathf.Clamp(Mathf.RoundToInt(Get(material, "_FurMode")), FurTransparent, FurTwoPass);
             material.enableInstancing = false;
             material.renderQueue = GetDefaultRenderQueue(mode, furMode);
+            material.SetFloat("_ZTest", (int)CompareFunction.LessEqual);
+            material.SetFloat("_OffsetFactor", 0f);
+            material.SetFloat("_OffsetUnits", 0f);
+            material.SetFloat("_ZWrite", 1f);
             Apply(material);
         }
 
