@@ -237,13 +237,13 @@ half3 FairyToonEFEnvReflection(float3 R, float3 positionWS, float2 screenUV, hal
     UNITY_BRANCH if (_EFEnvContrast > 0.0)
     {
         half envLuma = Luminance(env);
-        half pivoted = pow(max(envLuma / 0.38, 1e-4), 1.0 + _EFEnvContrast * 0.45) * 0.38;
-        half scale = clamp(pivoted / max(envLuma, 1e-4), 0.55, 2.8);
-        half sharpFactor = 1.0 - perceptualRoughness * 0.65;
-        half keyBand = pow(saturate(1.0 - abs(R.y - 0.32) * 2.2), 3.0) * sharpFactor;
-        half fillBand = pow(saturate(1.0 - abs(R.y + 0.12) * 2.6), 2.5) * sharpFactor * 0.45;
-        half3 baseFloor = max(ambient * 0.45, half3(0.14, 0.15, 0.18));
-        env = env * scale + max(env, baseFloor) * ((keyBand + fillBand) * _EFEnvContrast * 0.85);
+        half pivoted = pow(max(envLuma / 0.45, 1e-4), 1.0 + _EFEnvContrast * 0.35) * 0.45;
+        half scale = clamp(pivoted / max(envLuma, 1e-4), 0.45, 1.45);
+        half sharpFactor = (1.0 - perceptualRoughness * 0.70) * (1.0 - perceptualRoughness * 0.50);
+        half keyBand = pow(saturate(1.0 - abs(R.y - 0.32) * 2.4), 3.0) * sharpFactor;
+        half fillBand = pow(saturate(1.0 - abs(R.y + 0.12) * 2.8), 2.5) * sharpFactor * 0.40;
+        half3 bandBase = min(max(env, ambient * 0.35 + half3(0.08, 0.09, 0.11)), half3(0.75, 0.78, 0.85));
+        env = env * scale + bandBase * ((keyBand + fillBand) * saturate(_EFEnvContrast * 0.55));
     }
     return env;
 }
@@ -641,9 +641,12 @@ half3 FairyToonEndfieldShade(FairyToonSurface s, inout FairyToonLight l)
     half fresnel5 = pow(1.0 - NoV, 5.0);
     UNITY_BRANCH if (_EFMetalGrazingColor.a > 0.0)
     {
-        half metalCurve = lerp(0.80, 1.0, pow(1.0 - NoV, 2.0));
-        half3 silverTarget = max(F, _EFMetalGrazingColor.rgb * 0.88);
-        F = lerp(F, lerp(F, silverTarget, metalCurve), saturate(e.metallic * _EFMetalGrazingColor.a));
+        half metalFresnel = pow(1.0 - NoV, 3.0);
+        half3 metalBase = _EFMetalGrazingColor.rgb * specRamp;
+        half brightSpec = smoothstep(0.12, 0.65, Luminance(_EFMetalGrazingColor.rgb));
+        half3 metalEdge = max(metalBase, lerp(half3(0.42, 0.45, 0.52), half3(0.95, 0.97, 1.0), brightSpec));
+        half3 metalTarget = lerp(metalBase, metalEdge, metalFresnel);
+        F = lerp(F, metalTarget, saturate(e.metallic * _EFMetalGrazingColor.a));
     }
     half3 specLight = lerp(ambient + topLight, lightColor + topLight, day);
     col += min(max(D * vis - 6e-5, 0.0), 20.0) * F * specWeight * specLight * _EFSpecular;
@@ -722,33 +725,40 @@ half3 FairyToonEndfieldShade(FairyToonSurface s, inout FairyToonLight l)
     #if !defined(_FT_EF_SKIN) && !defined(_FT_EF_FACE) && !defined(_FT_EF_HAIR) && !defined(_FT_EF_EYE)
     float3 R = reflect(-s.V, N);
     half3 env = FairyToonEFEnvReflection(R, s.positionWS, s.screenUV, e.perceptualRoughness, ambient);
+    half tintLuma = _EFMetalGrazingColor.a > 0.0
+        ? lerp(Luminance(e.f0), Luminance(_EFMetalGrazingColor.rgb), _EFMetalGrazingColor.a)
+        : Luminance(e.f0);
+    half brightMetal = smoothstep(0.12, 0.65, tintLuma);
     UNITY_BRANCH if (e.metallic > 0.0 && _EFEnvContrast > 0.0)
     {
-        // View-space studio chrome tent so small curved silver chains and buckles read bright instead of reflecting dark floor.
+        // View-space studio chrome tent scaled cleanly by metallic brightness so bright silver and dark gunmetal both read crisp.
         float3 viewN = FairyToonEFNormalize(mul((float3x3)UNITY_MATRIX_V, N));
         half smoothBias = 1.0 - e.perceptualRoughness * 0.65;
-        half horizon = smoothstep(-0.48, 0.12, viewN.y);
-        half darkWaist = pow(saturate(1.0 - abs(viewN.y + 0.36) * 2.8), 2.0);
-        half keySpot = pow(saturate(dot(viewN, FairyToonEFNormalize(float3(0.22, 0.36, 0.91)))), lerp(4.0, 20.0, smoothBias));
-        half rimSpot = pow(saturate(dot(viewN, FairyToonEFNormalize(float3(-0.58, 0.24, 0.78)))), lerp(3.0, 12.0, smoothBias));
-        half bounceLower = smoothstep(-0.22, -0.82, viewN.y) * 0.42;
-        half domeLuma = lerp(0.32, 1.15, horizon) * (1.0 - darkWaist * 0.48) + bounceLower + keySpot * 1.55 + rimSpot * 0.85;
-        half3 chromeLight = max(ambient + topLight + lightColor * (day * 0.65), half3(0.58, 0.62, 0.68));
+        half horizon = smoothstep(lerp(-0.22, -0.48, brightMetal), lerp(0.28, 0.12, brightMetal), viewN.y);
+        half darkWaist = pow(saturate(1.0 - abs(viewN.y + lerp(0.14, 0.36, brightMetal)) * lerp(3.4, 2.8, brightMetal)), 2.0);
+        half keySpot = pow(saturate(dot(viewN, FairyToonEFNormalize(float3(0.22, 0.36, 0.91)))), lerp(6.0, 24.0, smoothBias));
+        half rimSpot = pow(saturate(dot(viewN, FairyToonEFNormalize(float3(-0.58, 0.24, 0.78)))), lerp(4.0, 14.0, smoothBias));
+        half bounceLower = smoothstep(-0.22, -0.82, viewN.y) * lerp(0.22, 0.42, brightMetal);
+        half domeLuma = lerp(lerp(0.06, 0.32, brightMetal), lerp(0.58, 1.15, brightMetal), horizon)
+            * (1.0 - darkWaist * lerp(0.72, 0.48, brightMetal))
+            + bounceLower + keySpot * lerp(1.65, 1.55, brightMetal) + rimSpot * lerp(0.75, 0.85, brightMetal);
+        half3 chromeLight = max(ambient + topLight + lightColor * (day * 0.65), half3(0.55, 0.59, 0.66));
         half3 studioMetal = chromeLight * domeLuma;
         env = lerp(env, studioMetal, saturate(e.metallic * saturate(_EFEnvContrast * 0.90)));
     }
     half3 iblF = lerp(e.f0, F, _EFSpecRampFresnel);
     UNITY_BRANCH if (_EFMetalGrazingColor.a > 0.0)
     {
-        half metalCurve = lerp(0.80, 1.0, pow(1.0 - NoV, 2.0));
-        half3 silverTargetIbl = max(iblF, _EFMetalGrazingColor.rgb * 0.92);
-        iblF = lerp(iblF, lerp(iblF, silverTargetIbl, metalCurve), saturate(e.metallic * _EFMetalGrazingColor.a));
+        half metalFresnelIbl = pow(1.0 - NoV, 3.0);
+        half3 metalEdgeIbl = max(_EFMetalGrazingColor.rgb, lerp(half3(0.40, 0.44, 0.50), half3(0.95, 0.97, 1.0), brightMetal));
+        half3 metalTargetIbl = lerp(_EFMetalGrazingColor.rgb, metalEdgeIbl, metalFresnelIbl);
+        iblF = lerp(iblF, metalTargetIbl, saturate(e.metallic * _EFMetalGrazingColor.a));
     }
     half2 envBRDF = FairyToonEFEnvBRDF(e.perceptualRoughness, NoV);
     half3 envSpec = iblF * envBRDF.x + saturate(50.0 * iblF.g) * envBRDF.y;
     half ess = envBRDF.x + envBRDF.y;
     envSpec *= 1.0 + iblF * (1.0 - ess) / max(ess, 0.001);
-    half3 aoEnv = lerp(aoAmbientColor, max(aoAmbientColor, 0.82), e.metallic * saturate(_EFEnvContrast));
+    half3 aoEnv = lerp(aoAmbientColor, max(aoAmbientColor, lerp(0.45, 0.82, brightMetal)), e.metallic * saturate(_EFEnvContrast));
     col += env * envSpec * aoEnv * _EFEnvironment;
     UNITY_BRANCH if (_EFFabricSheen > 0.0)
     {
