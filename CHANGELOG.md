@@ -1,5 +1,16 @@
 # Changelog
 
+## 0.3.0
+
+- Endfield P0+P1 material punch upgrade (all new controls default to 0, leaving 0.2.3 materials unchanged):
+  - Baked AO fallback from `_ShadowBorderMask.r` when `_PBRMap` is unbound (outside face and eye), plus Jimenez 2016 Multi-Bounce Colored AO (`_EFMultiBounceAO`) and 6-tap character-only depth Contact AO (`_EFContactAO`, `_EFContactAORadius`, `_EFContactAOBias`).
+  - Screen-space normal Curvature micro-shading (`_EFCurvature`, `_EFCurvatureScale`) outside face/eye/hair.
+  - Cloth/metal environment reflection contrast (`_EFEnvContrast`) with view-reflection (`viewR`) high-contrast chrome dome, Schlick metal grazing tint (`_EFMetalGrazingColor`), dark-safe non-metal microfiber Fabric Sheen (`_EFFabricSheen`), and dielectric Clearcoat (`_EFClearcoat`, `_EFClearcoatSmoothness`) isolated from metals (`1 - metallic`) with sub-pixel bevel AA and 82% micro-normal retention.
+  - Lowered Endfield GSAA minimum floor from `0.5` to `0.15` so pebbled leather and knit normal maps retain micro-specular crispness.
+  - Fixed `_GlitterColor` Gamma-HDR metadata parity across all four shaders (`[FairyToonHDR]`, matching lilToon `[lilHDR]` in Linear color space).
+  - `FairyToonTextureTools.PackPBRFromLilToonMaterial` helper for packing lilToon metal/MatCap masks, smoothness, and AO maps into an Endfield `_PBRMap`.
+  - Lossless opt-in Endfield 0.3.0 upgrade pipeline in `FairyToonConverter` (`FairyToonConvertOptions.UpgradeToEndfield`, `FairyToonEndfieldUpgrader`, context menu `Assets/FairyToon/Convert lilToon Material to Endfield (copy)`, and converter window controls) with deterministic surface & BrightSilver/SmokedGunmetal classification, automatic `_PBRMap` packing, authored Outline/RimShade/Rim/Glitter preservation, and `FairyToonConvertProfile` precedence.
+
 ## 0.2.3
 
 - Camera-aligned character shadows sample only the caster's own atlas tile. The main-light atlas can still cast between characters, and Unity scene shadows are independent.

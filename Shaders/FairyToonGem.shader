@@ -181,6 +181,17 @@ Shader "FairyToon/Gem"
         _EFSSSColor ("SSS Color", Color) = (1, 0.7, 0.62, 1)
         _EFSSSStrength ("SSS", Range(0, 1)) = 0.3
         _EFFaceSDFScale ("SDF Light Scale", Range(0.5, 1)) = 0.75
+        _EFMultiBounceAO ("Multi-Bounce AO", Range(0, 1)) = 0
+        _EFContactAO ("Character Contact AO", Range(0, 1)) = 0
+        _EFContactAORadius ("Contact AO Radius (m)", Range(0.01, 0.15)) = 0.045
+        _EFContactAOBias ("Contact AO Bias (m)", Range(0.001, 0.02)) = 0.004
+        _EFCurvature ("Curvature Detail", Range(0, 1)) = 0
+        _EFCurvatureScale ("Curvature Scale", Range(0.5, 8)) = 2.5
+        _EFEnvContrast ("Metal Env Contrast", Range(0, 2)) = 0
+        _EFMetalGrazingColor ("Metal Grazing Tint", Color) = (1, 1, 1, 0)
+        _EFFabricSheen ("Fabric Sheen", Range(0, 1)) = 0
+        _EFClearcoat ("Clearcoat", Range(0, 1)) = 0
+        _EFClearcoatSmoothness ("Clearcoat Smoothness", Range(0, 1)) = 0.9
         [NoScaleOffset] _EFEyeMask ("Eye Mask (R)", 2D) = "black" {}
         _EFEyeLight ("Eye Backlight Dimming", Range(0, 1)) = 0.3
         [NoScaleOffset] _EFEyeOverlay ("Eye Overlay (R lid shadow, G iris scatter)", 2D) = "black" {}
@@ -388,7 +399,7 @@ Shader "FairyToon/Gem"
         // Glitter
         [ToggleUI] _UseGlitter ("Glitter", Int) = 0
         [Enum(UV0, 0, UV1, 1)] _GlitterUVMode ("UV Mode", Int) = 0
-        [HDR] _GlitterColor ("Color", Color) = (1, 1, 1, 1)
+        [FairyToonHDR] _GlitterColor ("Color", Color) = (1, 1, 1, 1)
         _GlitterColorTex ("Texture", 2D) = "white" {}
         [Enum(UV0, 0, UV1, 1, UV2, 2, UV3, 3)] _GlitterColorTex_UVMode ("Color Texture UV Mode", Int) = 0
         _GlitterMainStrength ("Multiply Main Color", Range(0, 1)) = 0

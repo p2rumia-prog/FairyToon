@@ -2449,7 +2449,7 @@ test('Mermaid gamma HDR colour flags match lilToon in every shader without chang
     const upload = (text, name, rgba, linear) => rgba.map((x, i) => linear && i < 3 && !isHDR(text, name) ? decode(x) : x);
     const cases = [['_BacklightColor', [7.377215, 7.377215, 7.377215, 1]], ['_Color2nd', [0.7329843, 0.9367802, 2, 1]], ['_Color3rd', [0.2, 0.6, 3, 0.4]],
         ['_DissolveColor', [0.67450976, 0.795309, 2.9960787, 1]], ['_Main2ndDissolveColor', [.3, 1.4, 2.7, 0]],
-        ['_Main3rdDissolveColor', [2.2, .4, 3.1, .2]], ['_EmissionColor', [2, 2, 2, 1]], ['_Emission2ndColor', [0.2, 2, 32, 0.3]]];
+        ['_Main3rdDissolveColor', [2.2, .4, 3.1, .2]], ['_GlitterColor', [16, 16, 16, 1]], ['_EmissionColor', [2, 2, 2, 1]], ['_Emission2ndColor', [0.2, 2, 32, 0.3]]];
     for (const suffix of ['', 'Refraction', 'Fur', 'Gem']) {
         const text = read('Shaders/FairyToon' + suffix + '.shader');
         for (const [name, saved] of cases) {
