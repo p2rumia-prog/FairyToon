@@ -654,18 +654,23 @@ half3 FairyToonEndfieldShade(FairyToonSurface s, inout FairyToonLight l)
     #if !defined(_FT_EF_SKIN)
         UNITY_BRANCH if (_EFClearcoat > 0.0)
         {
+            // Mask dielectric clearcoat off metallic regions so buckles/hardware keep crisp obsidian-to-white chrome contrast.
+            half ccMask = _EFClearcoat * (1.0 - e.metallic);
             float3 ccN = FairyToonEFNormalize(lerp(s.origN, N, 0.82));
+            float3 ccDN = max(abs(ddx(ccN)), abs(ddy(ccN)));
+            float ccVar = dot(ccDN, ccDN);
+            half ccSmooth = saturate(_EFClearcoatSmoothness - smoothstep(0.05, 0.45, ccVar) * 0.28);
             float3 ccH = FairyToonEFNormalize(sceneLit * L + 0.85 * cameraLight + s.V * (sceneLit + 0.85));
             float ccNoH = saturate(dot(ccN, ccH));
             float ccNoV = saturate(dot(ccN, s.V));
-            half ccPerceptual = saturate(1.0 - _EFClearcoatSmoothness);
+            half ccPerceptual = saturate(1.0 - ccSmooth);
             half ccRough = max(ccPerceptual * ccPerceptual, 0.0078125);
             float ccA2 = ccRough * ccRough;
             float ccDenom = ccNoH * ccNoH * (ccA2 - 1.0) + 1.0;
             float ccD = ccA2 / (ccDenom * ccDenom);
             float ccVis = 1.0 / (4.0 * ccNoV + 2.0 * ccRough);
-            half ccF = 0.04 + 0.96 * pow(1.0 - ccNoV, 5.0);
-            col += min(max(ccD * ccVis - 6e-5, 0.0), 28.0) * ccF * _EFClearcoat * specWeight * specLight * _EFSpecular;
+            half ccF = 0.04 + 0.76 * pow(1.0 - ccNoV, 5.0);
+            col += min(max(ccD * ccVis - 6e-5, 0.0), 24.0) * ccF * ccMask * specWeight * specLight * _EFSpecular;
         }
     #endif
     #endif
@@ -744,8 +749,8 @@ half3 FairyToonEndfieldShade(FairyToonSurface s, inout FairyToonLight l)
         half lowerBounce = smoothstep(-0.22, -0.78, viewR.y) * lerp(0.16, 0.52, brightMetal);
         half keySpot = pow(saturate(dot(viewR, FairyToonEFNormalize(float3(-0.34, 0.62, 0.71)))), lerp(5.0, 26.0, smoothBias));
         half rimSpot = pow(saturate(dot(viewR, FairyToonEFNormalize(float3(0.66, 0.36, 0.66)))), lerp(4.0, 18.0, smoothBias));
-        half baseBand = lerp(lerp(0.02, 0.12, brightMetal), lerp(0.42, 1.15, brightMetal), upperSoftbox);
-        half domeLuma = baseBand * (1.0 - darkCore * lerp(0.90, 0.80, brightMetal))
+        half baseBand = lerp(lerp(0.02, 0.10, brightMetal), lerp(0.42, 1.15, brightMetal), upperSoftbox);
+        half domeLuma = baseBand * (1.0 - darkCore * lerp(0.92, 0.86, brightMetal))
             + lowerBounce + keySpot * lerp(1.45, 2.25, brightMetal) + rimSpot * lerp(0.85, 1.35, brightMetal);
         half3 chromeLight = max(ambient + topLight + lightColor * (day * 0.85), half3(0.45, 0.48, 0.54));
         half3 studioMetal = chromeLight * domeLuma;
@@ -763,7 +768,7 @@ half3 FairyToonEndfieldShade(FairyToonSurface s, inout FairyToonLight l)
     half3 envSpec = iblF * envBRDF.x + saturate(50.0 * iblF.g) * envBRDF.y;
     half ess = envBRDF.x + envBRDF.y;
     envSpec *= 1.0 + iblF * (1.0 - ess) / max(ess, 0.001);
-    half3 aoEnv = lerp(aoAmbientColor, max(aoAmbientColor, lerp(0.24, 0.48, brightMetal)), e.metallic * saturate(_EFEnvContrast));
+    half3 aoEnv = lerp(aoAmbientColor, max(aoAmbientColor, lerp(0.18, 0.38, brightMetal)), e.metallic * saturate(_EFEnvContrast));
     col += env * envSpec * aoEnv * _EFEnvironment;
     UNITY_BRANCH if (_EFFabricSheen > 0.0)
     {
@@ -777,13 +782,17 @@ half3 FairyToonEndfieldShade(FairyToonSurface s, inout FairyToonLight l)
     }
     UNITY_BRANCH if (_EFClearcoat > 0.0)
     {
+        half ccMaskIbl = _EFClearcoat * (1.0 - e.metallic);
         float3 ccN = FairyToonEFNormalize(lerp(s.origN, N, 0.82));
+        float3 ccDN = max(abs(ddx(ccN)), abs(ddy(ccN)));
+        float ccVar = dot(ccDN, ccDN);
+        half ccSmooth = saturate(_EFClearcoatSmoothness - smoothstep(0.05, 0.45, ccVar) * 0.28);
         float3 ccR = reflect(-s.V, ccN);
         half ccNoV = saturate(dot(ccN, s.V));
-        half ccPerceptual = saturate(1.0 - _EFClearcoatSmoothness);
+        half ccPerceptual = saturate(1.0 - ccSmooth);
         half3 ccEnv = FairyToonEFEnvReflection(ccR, s.positionWS, s.screenUV, ccPerceptual, ambient);
-        half ccF = 0.04 + 0.96 * pow(1.0 - ccNoV, 5.0);
-        col += ccEnv * ccF * _EFClearcoat * aoAmbientColor * max(_EFEnvironment, 0.35);
+        half ccF = 0.04 + 0.76 * pow(1.0 - ccNoV, 5.0);
+        col += ccEnv * ccF * ccMaskIbl * aoAmbientColor * max(_EFEnvironment, 0.35);
     }
     #endif
 
