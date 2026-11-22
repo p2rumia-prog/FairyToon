@@ -384,6 +384,17 @@ CBUFFER_START(UnityPerMaterial)
     half4  _EFSSSColor;
     half   _EFSSSStrength;
     half   _EFFaceSDFScale;
+    half   _EFMultiBounceAO;
+    half   _EFContactAO;
+    half   _EFContactAORadius;
+    half   _EFContactAOBias;
+    half   _EFCurvature;
+    half   _EFCurvatureScale;
+    half   _EFEnvContrast;
+    half4  _EFMetalGrazingColor;
+    half   _EFFabricSheen;
+    half   _EFClearcoat;
+    half   _EFClearcoatSmoothness;
 
     // See-through hair (FairyToon)
     half   _SeeThroughRole;

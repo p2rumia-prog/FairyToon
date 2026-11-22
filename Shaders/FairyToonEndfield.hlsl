@@ -192,10 +192,56 @@ FairyToonEndfieldSurface FairyToonEFGetSurface(FairyToonSurface s)
     smoothness = min(smoothness, 1.0 - saturate(variance / (variance * 5.0 + 0.002) * max(_GSAAStrength, 0.5)));
     e.perceptualRoughness = 1.0 - smoothness;
     e.roughness = max(e.perceptualRoughness * e.perceptualRoughness, 0.0078125);
-    e.ao = lerp(1.0, pbr.b, _EFOcclusion);
+    half occlusion = pbr.b;
+    #if !defined(_FT_EF_FACE) && !defined(_FT_EF_EYE)
+        if (_EFPBRMapOn <= 0.5)
+            occlusion = SAMPLE_TEXTURE2D(_ShadowBorderMask, sampler_MainTex, s.uvMain).r;
+    #endif
+    e.ao = lerp(1.0, occlusion, _EFOcclusion);
     e.brdfDiffuse = s.albedo * (1.0 - 0.96 * e.metallic);
     e.f0 = lerp(0.04 * pbr.g * _EFReflectivity, s.albedo, e.metallic);
     return e;
+}
+
+// Multi-bounce colored AO (Jimenez et al. SIGGRAPH 2016) so deep creases retain albedo saturation instead of muddying to grey.
+half3 FairyToonEFMultiBounceAO(half ao, half3 albedo)
+{
+    half3 a =  2.0404h * albedo - 0.3324h;
+    half3 b = -4.7951h * albedo + 0.6417h;
+    half3 c =  2.7552h * albedo + 0.6903h;
+    return max(ao.xxx, ((ao * a + b) * ao + c) * ao);
+}
+
+// Screen-space curvature micro-shading (convex crest lift, concave fold carve) without extra textures.
+half FairyToonEFCurvature(float3 N, float3 positionWS)
+{
+    float3 dNx = ddx(N);
+    float3 dNy = ddy(N);
+    float3 dPx = ddx(positionWS);
+    float3 dPy = ddy(positionWS);
+    float kx = dot(dNx, dPx) / max(dot(dPx, dPx), 1e-6);
+    float ky = dot(dNy, dPy) / max(dot(dPy, dPy), 1e-6);
+    float viewDepth = -TransformWorldToView(positionWS).z;
+    float fade = 1.0 - smoothstep(2.5, 9.0, viewDepth);
+    float kRaw = (kx + ky) * 0.008 * _EFCurvatureScale;
+    float k = (kRaw / (1.0 + abs(kRaw))) * fade;
+    half delta = k >= 0.0 ? k * 0.14 * _EFCurvature : k * 0.20 * _EFCurvature;
+    return clamp(1.0 + delta, 0.72, 1.18);
+}
+
+half3 FairyToonEFEnvReflection(float3 R, float3 positionWS, float2 screenUV, half perceptualRoughness, half3 ambient)
+{
+    half3 env = _ReflectionCubeOverride > 0.5
+        ? FairyToonSampleReflectionCube(R, perceptualRoughness) * ambient
+        : GlossyEnvironmentReflection(R, positionWS, perceptualRoughness, 1.0, screenUV);
+    UNITY_BRANCH if (_EFEnvContrast > 0.0)
+    {
+        half envLuma = Luminance(env);
+        half targetLuma = pow(max(envLuma, 1e-4), 1.0 + _EFEnvContrast * 0.75) * (1.0 + _EFEnvContrast * 0.65);
+        half studioBand = pow(saturate(1.0 - abs(R.y - 0.28) * 2.2), 3.0) * (1.0 - perceptualRoughness * 0.7);
+        env = env * min(targetLuma / max(envLuma, 1e-4), 3.0) + max(env, ambient * 0.35 + 0.08) * (studioBand * _EFEnvContrast * 0.9);
+    }
+    return env;
 }
 
 // Skin shadow colour from the LUT (Unity's 2D LUT layout, 32 slices of 32 x 32, sRGB in and out).
@@ -289,6 +335,46 @@ half FairyToonEFDepthEdge(FairyToonSurface s, float3 N)
     return edge;
 }
 
+// Character-only micro-contact AO over _FT_CharacterDepth using tangent-plane elevation so tilted flat surfaces stay artifact-free.
+half FairyToonEFContactAO(FairyToonSurface s, float3 geomN)
+{
+    if (_FT_DepthRim.x < 0.5 || _FT_DepthRim.y < 0.5) return 1.0;
+    float3 selfVS = TransformWorldToView(s.positionWS);
+    float selfDepth = -selfVS.z;
+    float distFade = 1.0 - smoothstep(4.0, 12.0, selfDepth);
+    if (distFade <= 0.0 || selfDepth <= 0.02) return 1.0;
+
+    float3 viewN = FairyToonEFNormalize(mul((float3x3)UNITY_MATRIX_V, geomN));
+    float2 px = s.screenUV * _ScaledScreenParams.xy;
+    float baseAngle = frac(52.9829189 * frac(dot(px, float2(0.06711056, 0.00583715)))) * 6.2831853;
+    float radiusM = _EFContactAORadius;
+    float maxRange = radiusM * 2.5;
+    float2 flip = float2(0.5, 0.5 * _ProjectionParams.x);
+
+    float occSum = 0.0;
+    UNITY_UNROLL
+    for (int i = 0; i < 6; i++)
+    {
+        float angle = baseAngle + i * 2.39996323;
+        float fracR = sqrt((i + 0.5) / 6.0);
+        float2 dXY = float2(cos(angle), sin(angle)) * (radiusM * fracR);
+        float dzTangent = -(dXY.x * viewN.x + dXY.y * viewN.y) / max(viewN.z, 0.35);
+        float3 sampleVS = selfVS + float3(dXY, clamp(dzTangent, -radiusM, radiusM));
+        float4 clip = mul(UNITY_MATRIX_P, float4(sampleVS, 1.0));
+        float2 tapUV = clip.xy / max(abs(clip.w), 1e-5) * flip + 0.5;
+        if (tapUV.x >= 0.0 && tapUV.x <= 1.0 && tapUV.y >= 0.0 && tapUV.y <= 1.0)
+        {
+            float expectedDepth = -sampleVS.z;
+            float tapDepth = FairyToonEFSceneDepth(tapUV);
+            float dz = expectedDepth - tapDepth;
+            float occ = smoothstep(_EFContactAOBias, _EFContactAOBias + radiusM * 0.55, dz)
+                * (1.0 - smoothstep(radiusM * 1.2, maxRange, dz));
+            occSum += occ;
+        }
+    }
+    return 1.0 - saturate((occSum / 6.0) * 2.2) * _EFContactAO * distFade;
+}
+
 // Cloth / metal, skin (_FT_EF_SKIN), face (_FT_EF_FACE), hair (_FT_EF_HAIR) and eyes (_FT_EF_EYE). Fills `l` for the
 // lilToon layers that run afterwards (Reflection, MatCap, Rim Light).
 half3 FairyToonEndfieldShade(FairyToonSurface s, inout FairyToonLight l)
@@ -344,9 +430,6 @@ half3 FairyToonEndfieldShade(FairyToonSurface s, inout FairyToonLight l)
         ssao = GetScreenSpaceAmbientOcclusion(s.screenUV).indirectAmbientOcclusion;
         ssao = lerp(1.0, ssao, SAMPLE_TEXTURE2D(_SSAOMask, sampler_MainTex, s.uvMain).r);
     #endif
-    half aoLit = e.ao * lerp(1.0, ssao, _SSAOLitStrength);
-    half aoAmbient = e.ao * lerp(1.0, ssao, _SSAOStrength);
-
     // Shared surface setup always faces Endfield N; ShadeBase faces geometric origN for Face.
     bool useBackfaceNormal = s.facing < 0.0;
     float3 N = s.N;
@@ -378,6 +461,25 @@ half3 FairyToonEndfieldShade(FairyToonSurface s, inout FairyToonLight l)
             faceMeshBlend = 1.0;
         }
     #endif
+    half contactAO = 1.0;
+    #if !defined(_FT_EF_EYE) && !defined(_SURFACE_TYPE_TRANSPARENT)
+        UNITY_BRANCH if (_EFContactAO > 0.0)
+        {
+            contactAO = FairyToonEFContactAO(s, s.origN);
+            #if defined(_FT_EF_FACE)
+                contactAO = lerp(1.0, contactAO, faceMeshBlend);
+            #endif
+        }
+    #endif
+    half aoLit = e.ao * lerp(1.0, ssao, _SSAOLitStrength) * lerp(1.0, contactAO, 0.75);
+    half aoAmbient = e.ao * lerp(1.0, ssao, _SSAOStrength) * contactAO;
+    half3 aoAmbientColor = aoAmbient.xxx;
+    half3 aoContactTint = contactAO.xxx;
+    UNITY_BRANCH if (_EFMultiBounceAO > 0.0)
+    {
+        aoAmbientColor = lerp(aoAmbientColor, FairyToonEFMultiBounceAO(aoAmbient, s.albedo), _EFMultiBounceAO);
+        aoContactTint = lerp(aoContactTint, FairyToonEFMultiBounceAO(contactAO, s.albedo), _EFMultiBounceAO);
+    }
     // Character self-shadow (FairyToonFeature: a projector above the camera, as in Endfield, or the sun). It darkens both
     // the sun term and the view light, so the chin shadow on the neck and the hair's shadow on itself show in the sun and
     // in the shade. The face's SDF area ignores it (it would fight the SDF); the SDF's mesh blend (B: neck, ears) takes
@@ -473,9 +575,18 @@ half3 FairyToonEndfieldShade(FairyToonSurface s, inout FairyToonLight l)
     half3 materialDiffuse = lerp(shade, tinted, sceneLit);
     // (eyes keep their own colour: only dimmed, never moved to the shadow tones)
     materialDiffuse = lerp(materialDiffuse, diffuseLit * eyeLit, eye);
+    materialDiffuse *= lerp(1.0, aoContactTint, 0.40 * (1.0 - eye));
+    #if !defined(_FT_EF_FACE) && !defined(_FT_EF_EYE) && !defined(_FT_EF_HAIR)
+        UNITY_BRANCH if (_EFCurvature > 0.0)
+        {
+            float3 curvN = FairyToonEFNormalize(lerp(s.origN, N, 0.35));
+            half curv = FairyToonEFCurvature(curvN, s.positionWS);
+            materialDiffuse *= lerp(1.0, curv, smoothstep(0.08, 0.45, NoV));
+        }
+    #endif
 
     // ---- Light colour. In shadow the direct light only adds its brightness, so a coloured sun does not tint shadows.
-    half3 ambient = FairyToonEFAmbient(N, s) * aoAmbient;
+    half3 ambient = FairyToonEFAmbient(N, s) * aoAmbientColor;
     // (in the shade the top light takes over from the sun, so it gets its own, stronger setting)
     half3 topLight = FairyToonEFTopLight(N, character);
     half lightLuma = Luminance(lightColor);
@@ -523,8 +634,26 @@ half3 FairyToonEndfieldShade(FairyToonSurface s, inout FairyToonLight l)
     float rampU = lerp(saturate(D * a2), NoV * NoV, _EFSpecRampFresnel);
     half3 specRamp = SAMPLE_TEXTURE2D_LOD(_SpecRamp, sampler_ft_linear_clamp, float2(rampU, e.perceptualRoughness * (1.0 - e.metallic)), 0).rgb;
     half3 F = e.f0 * specRamp;
+    half fresnel5 = pow(1.0 - NoV, 5.0);
+    F = lerp(F, _EFMetalGrazingColor.rgb * max(max(F.r, F.g), max(F.b, 0.04)), saturate(e.metallic * _EFMetalGrazingColor.a * fresnel5));
     half3 specLight = lerp(ambient + topLight, lightColor + topLight, day);
     col += min(max(D * vis - 6e-5, 0.0), 20.0) * F * specWeight * specLight * _EFSpecular;
+    #if !defined(_FT_EF_SKIN)
+        UNITY_BRANCH if (_EFClearcoat > 0.0)
+        {
+            float3 ccN = FairyToonEFNormalize(lerp(s.origN, N, 0.20));
+            float ccNoH = saturate(dot(ccN, H));
+            float ccNoV = saturate(dot(ccN, s.V));
+            half ccPerceptual = saturate(1.0 - _EFClearcoatSmoothness);
+            half ccRough = max(ccPerceptual * ccPerceptual, 0.0078125);
+            float ccA2 = ccRough * ccRough;
+            float ccDenom = ccNoH * ccNoH * (ccA2 - 1.0) + 1.0;
+            float ccD = ccA2 / (ccDenom * ccDenom);
+            float ccVis = 1.0 / (4.0 * ccNoV + 2.0 * ccRough);
+            half ccF = 0.06 + 0.94 * pow(1.0 - ccNoV, 5.0);
+            col += min(max(ccD * ccVis - 6e-5, 0.0), 24.0) * ccF * _EFClearcoat * specWeight * specLight * _EFSpecular;
+        }
+    #endif
     #endif
 
     #if defined(_FT_EF_FACE)
@@ -583,21 +712,30 @@ half3 FairyToonEndfieldShade(FairyToonSurface s, inout FairyToonLight l)
     // compensation so rough metal does not go grey.
     #if !defined(_FT_EF_SKIN) && !defined(_FT_EF_FACE) && !defined(_FT_EF_HAIR) && !defined(_FT_EF_EYE)
     float3 R = reflect(-s.V, N);
-    half3 env;
-    if (_ReflectionCubeOverride > 0.5)
-    {
-        env = FairyToonSampleReflectionCube(R, e.perceptualRoughness) * ambient;
-    }
-    else
-    {
-        env = GlossyEnvironmentReflection(R, s.positionWS, e.perceptualRoughness, 1.0, s.screenUV);
-    }
+    half3 env = FairyToonEFEnvReflection(R, s.positionWS, s.screenUV, e.perceptualRoughness, ambient);
     half3 iblF = lerp(e.f0, F, _EFSpecRampFresnel);
+    iblF = lerp(iblF, _EFMetalGrazingColor.rgb, saturate(e.metallic * _EFMetalGrazingColor.a * fresnel5));
     half2 envBRDF = FairyToonEFEnvBRDF(e.perceptualRoughness, NoV);
     half3 envSpec = iblF * envBRDF.x + saturate(50.0 * iblF.g) * envBRDF.y;
     half ess = envBRDF.x + envBRDF.y;
     envSpec *= 1.0 + iblF * (1.0 - ess) / max(ess, 0.001);
-    col += env * envSpec * aoAmbient * _EFEnvironment;
+    col += env * envSpec * aoAmbientColor * _EFEnvironment;
+    UNITY_BRANCH if (_EFFabricSheen > 0.0)
+    {
+        half sheenD = pow(1.0 - NoV, 3.2) * (0.35 + 0.65 * saturate(dot(N, L) * 0.5 + 0.5));
+        half3 fiberTint = lerp(diffuseLit, Luminance(diffuseLit).xxx * 1.1 + 0.06, 0.5);
+        col += sheenD * _EFFabricSheen * 0.45 * (1.0 - e.metallic) * aoAmbientColor * fiberTint * mainSum;
+    }
+    UNITY_BRANCH if (_EFClearcoat > 0.0)
+    {
+        float3 ccN = FairyToonEFNormalize(lerp(s.origN, N, 0.20));
+        float3 ccR = reflect(-s.V, ccN);
+        half ccNoV = saturate(dot(ccN, s.V));
+        half ccPerceptual = saturate(1.0 - _EFClearcoatSmoothness);
+        half3 ccEnv = FairyToonEFEnvReflection(ccR, s.positionWS, s.screenUV, ccPerceptual, ambient);
+        half ccF = 0.06 + 0.94 * pow(1.0 - ccNoV, 5.0);
+        col += ccEnv * ccF * _EFClearcoat * aoAmbientColor * max(_EFEnvironment, 0.35);
+    }
     #endif
 
     // ---- Rim: a Fresnel rim and a rim on the side the light comes from (horizontal light only). The face gets only

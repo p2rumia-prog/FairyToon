@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.3.0
+
+- Endfield P0+P1 material punch upgrade (all new controls default to 0, leaving 0.2.3 materials unchanged):
+  - Baked AO fallback from `_ShadowBorderMask.r` when `_PBRMap` is unbound (outside face and eye), plus Jimenez 2016 Multi-Bounce Colored AO (`_EFMultiBounceAO`) and 6-tap character-only depth Contact AO (`_EFContactAO`, `_EFContactAORadius`, `_EFContactAOBias`).
+  - Screen-space normal Curvature micro-shading (`_EFCurvature`, `_EFCurvatureScale`) outside face/eye/hair.
+  - Cloth/metal environment reflection contrast & studio horizon lift (`_EFEnvContrast`), Schlick metal grazing tint (`_EFMetalGrazingColor`), non-metal microfiber Fabric Sheen (`_EFFabricSheen`), and dielectric Clearcoat lobe (`_EFClearcoat`, `_EFClearcoatSmoothness`).
+  - `FairyToonTextureTools.PackPBRFromLilToonMaterial` helper for converting lilToon metal/MatCap masks, smoothness, and AO maps into a packed Endfield `_PBRMap`.
+
 ## 0.2.3
 
 - Camera-aligned character shadows sample only the caster's own atlas tile. The main-light atlas can still cast between characters, and Unity scene shadows are independent.
