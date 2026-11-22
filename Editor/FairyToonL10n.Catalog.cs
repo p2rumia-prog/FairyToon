@@ -306,7 +306,7 @@ namespace NW.FairyToon.Editor
             Add("Cubemap Fallback (x ambient)", "Cubemap Fallback (x ambient)", "キューブマップの代替（環境光を乗算）", "立方体贴图后备（乘以环境光）");
             Add("Toon", "Toon", "トゥーン", "卡通");
             Add("Specular Ramp", "Specular Ramp", "スペキュラランプ", "高光渐变");
-            Add("GSAA (at least 0.5)", "GSAA (at least 0.5)", "GSAA（0.5 以上）", "GSAA（至少 0.5）");
+            Add("GSAA (at least 0.15)", "GSAA (at least 0.15)", "GSAA（0.15 以上）", "GSAA（至少 0.15）");
             Add("Eye / Brow Mask", "Eye / Brow Mask", "目 / 眉マスク", "眼 / 眉蒙版");
             Add("Cutoff", "Cutoff", "カットオフ", "裁切");
             Add("Hair over the mask", "Hair over the mask", "マスクの上の髪", "蒙版上的头发");

@@ -399,7 +399,7 @@ Shader "FairyToon/Gem"
         // Glitter
         [ToggleUI] _UseGlitter ("Glitter", Int) = 0
         [Enum(UV0, 0, UV1, 1)] _GlitterUVMode ("UV Mode", Int) = 0
-        [HDR] _GlitterColor ("Color", Color) = (1, 1, 1, 1)
+        [FairyToonHDR] _GlitterColor ("Color", Color) = (1, 1, 1, 1)
         _GlitterColorTex ("Texture", 2D) = "white" {}
         [Enum(UV0, 0, UV1, 1, UV2, 2, UV3, 3)] _GlitterColorTex_UVMode ("Color Texture UV Mode", Int) = 0
         _GlitterMainStrength ("Multiply Main Color", Range(0, 1)) = 0
