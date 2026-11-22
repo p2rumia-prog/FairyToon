@@ -126,10 +126,13 @@ namespace NW.FairyToon.Editor
         }
 
         private static FairyToonConvertReport Convert(Material source, Material target, FairyToonConvertOptions options,
-            List<FairyToonConvertProfile> profiles)
+            List<FairyToonConvertProfile> profiles, string targetAssetPath = null)
         {
             var report = NewReport(source);
-            report.TargetPath = target == null ? "" : AssetDatabase.GetAssetPath(target);
+            string resolvedTargetPath = !string.IsNullOrEmpty(targetAssetPath)
+                ? targetAssetPath
+                : (target == null ? "" : AssetDatabase.GetAssetPath(target));
+            report.TargetPath = resolvedTargetPath;
             if (!IsLilToon(source)) { report.Errors.Add("Source is not a lilToon material."); return report; }
             if (target == null) { report.Errors.Add("Target material is missing."); return report; }
             // (snapshot before the swap also makes in-place conversion safe)
@@ -187,6 +190,13 @@ namespace NW.FairyToon.Editor
                     target.SetFloat("_Cutoff", 0.5f);
                     target.SetFloat("_AlphaToMask", 1f);
                     report.AppliedOverrides.Add("Transparent hair to Cutout: _TransparentMode = 1, _Cutoff = 0.5, _AlphaToMask = 1.");
+                }
+                if (options.UpgradeToEndfield)
+                {
+                    if (variant.Mode <= FairyToonMaterialSetup.Transparent)
+                        FairyToonEndfieldUpgrader.Apply(snapshot, target, report.SourcePath, resolvedTargetPath, variant.Outline, options, report);
+                    else
+                        report.AppliedOverrides.Add("Endfield upgrade skipped on special optical mode (" + FairyToonMaterialSetup.GetShaderName(variant.Mode) + ").");
                 }
                 var profileProperties = ApplyProfiles(source, target, profiles, report);
                 if (convertHair && FairyToonMaterialSetup.GetRenderingMode(target) == FairyToonMaterialSetup.Cutout
@@ -276,7 +286,7 @@ namespace NW.FairyToon.Editor
                                 Undo.RecordObject(target, "Refresh FairyToon material");
                             }
                         }
-                        report = Convert(source, target, options, profiles);
+                        report = Convert(source, target, options, profiles, path);
                         report.TargetPath = path;
                         if (created != null && report.Success)
                         {
@@ -549,10 +559,16 @@ namespace NW.FairyToon.Editor
         [MenuItem("Assets/FairyToon/Convert lilToon Material (copy)")]
         private static void ConvertSelectionCopy() => ConvertAll(CollectMaterials(Selection.objects), new FairyToonConvertOptions());
 
+        [MenuItem("Assets/FairyToon/Convert lilToon Material to Endfield (copy)")]
+        private static void ConvertSelectionToEndfieldCopy() => ConvertAll(
+            CollectMaterials(Selection.objects),
+            new FairyToonConvertOptions { UpgradeToEndfield = true });
+
         [MenuItem("Assets/FairyToon/Convert lilToon Material (in place)")]
         private static void ConvertSelectionInPlace() => ConvertAll(CollectMaterials(Selection.objects), new FairyToonConvertOptions { InPlace = true });
 
         [MenuItem("Assets/FairyToon/Convert lilToon Material (copy)", true)]
+        [MenuItem("Assets/FairyToon/Convert lilToon Material to Endfield (copy)", true)]
         [MenuItem("Assets/FairyToon/Convert lilToon Material (in place)", true)]
         // (cheap on purpose: runs every time the context menu opens; folders and prefabs are only searched on convert)
         private static bool ValidateSelection() => Selection.objects.Any(o => o is Material m ? IsLilToon(m)
@@ -667,6 +683,20 @@ namespace NW.FairyToon.Editor
             using (new EditorGUI.DisabledScope(options.InPlace))
                 options.OutputFolder = EditorGUILayout.TextField("Output folder (optional)", options.OutputFolder ?? "");
             options.TransparentHairToCutout = EditorGUILayout.Toggle("Transparent hair to Cutout", options.TransparentHairToCutout);
+            options.UpgradeToEndfield = EditorGUILayout.Toggle("Upgrade to Endfield 0.3.0 PBR", options.UpgradeToEndfield);
+            if (options.UpgradeToEndfield)
+            {
+                using (new EditorGUI.IndentLevelScope())
+                {
+                    options.PackPBRMaps = EditorGUILayout.Toggle("Pack PBR Maps", options.PackPBRMaps);
+                    using (new EditorGUI.DisabledScope(!options.PackPBRMaps))
+                        options.PBRMapOutputFolder = EditorGUILayout.TextField("PBR Map folder (optional)", options.PBRMapOutputFolder ?? "");
+                    options.MetalStyle = (FairyToonEndfieldMetalStyle)EditorGUILayout.EnumPopup("Metal style", options.MetalStyle);
+                    options.BoostGlitterHDR = EditorGUILayout.Toggle("Boost Glitter HDR", options.BoostGlitterHDR);
+                    options.EndfieldDiffuseRamp = (Texture2D)EditorGUILayout.ObjectField("Diffuse ramp (optional)", options.EndfieldDiffuseRamp, typeof(Texture2D), false);
+                    options.EndfieldSpecRamp = (Texture2D)EditorGUILayout.ObjectField("Specular ramp (optional)", options.EndfieldSpecRamp, typeof(Texture2D), false);
+                }
+            }
             options.UseProjectProfiles = EditorGUILayout.Toggle("Use project profiles", options.UseProjectProfiles);
             options.Profile = (FairyToonConvertProfile)EditorGUILayout.ObjectField("Profile (applied last)", options.Profile, typeof(FairyToonConvertProfile), false);
             if (GUILayout.Button("Convert"))
