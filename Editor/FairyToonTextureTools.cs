@@ -45,14 +45,16 @@ namespace NW.FairyToon.Editor
         /// <summary>Packs an Endfield _PBRMap from a lilToon-style material (supporting metal or MatCap mask as metal), assigns it and applies setup.</summary>
         public static Texture2D PackPBRFromLilToonMaterial(Material material, string assetPath, float clothSmoothness = 0.25f,
             float metalSmoothness = 0.85f, bool matCapMaskAsMetal = false, float metalThreshold = 0.25f,
-            float defaultReflectivity = 0.5f, int maxSize = 2048)
+            float defaultReflectivity = 0.5f, int maxSize = 2048, float metalStrength = 0.85f)
         {
             if (material == null) throw new ArgumentNullException(nameof(material));
             CheckSize(maxSize);
             Texture metalTex = material.HasProperty("_MetallicGlossMap") ? material.GetTexture("_MetallicGlossMap") : null;
-            if (metalTex == null && matCapMaskAsMetal && material.HasProperty("_MatCapBlendMask"))
+            bool useMatCap = !material.HasProperty("_UseMatCap") || material.GetFloat("_UseMatCap") > 0.5f;
+            bool useMatCap2nd = material.HasProperty("_UseMatCap2nd") && material.GetFloat("_UseMatCap2nd") > 0.5f;
+            if (metalTex == null && matCapMaskAsMetal && useMatCap && material.HasProperty("_MatCapBlendMask"))
                 metalTex = material.GetTexture("_MatCapBlendMask");
-            if (metalTex == null && matCapMaskAsMetal && material.HasProperty("_MatCap2ndBlendMask"))
+            if (metalTex == null && matCapMaskAsMetal && useMatCap2nd && material.HasProperty("_MatCap2ndBlendMask"))
                 metalTex = material.GetTexture("_MatCap2ndBlendMask");
             Texture smoothTex = material.HasProperty("_SmoothnessTex") ? material.GetTexture("_SmoothnessTex") : null;
             Texture aoTex = material.HasProperty("_ShadowBorderMask") ? material.GetTexture("_ShadowBorderMask") : null;
@@ -72,17 +74,19 @@ namespace NW.FairyToon.Editor
             float thresholdLow = Mathf.Clamp01(metalThreshold * 0.5f);
             float thresholdHigh = Mathf.Max(thresholdLow + 1e-4f, Mathf.Clamp01(metalThreshold));
             float refl = Mathf.Clamp01(defaultReflectivity);
+            float clampedMetalStrength = Mathf.Clamp01(metalStrength);
 
             var pixels = new Color[width * height];
             for (int i = 0; i < pixels.Length; i++)
             {
-                float m = metalPx != null
+                float rawMask = metalPx != null
                     ? Mathf.SmoothStep(0f, 1f, Mathf.InverseLerp(thresholdLow, thresholdHigh, metalPx[i].r))
                     : baseMetal;
+                float m = rawMask * clampedMetalStrength;
                 float ao = aoPx != null ? Mathf.Clamp01(aoPx[i].r) : 1f;
                 float sm = smoothPx != null
                     ? Mathf.Clamp01(smoothPx[i].r * baseSmooth)
-                    : Mathf.Lerp(clothSmoothness, metalSmoothness, m);
+                    : Mathf.Lerp(clothSmoothness, metalSmoothness, rawMask);
                 pixels[i] = new Color(m, refl, ao, sm);
             }
 
